@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+logs/
+roms/
+music/
+models/
+*.wav
+.DS_Store
