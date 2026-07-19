@@ -40,7 +40,7 @@ class GamesPlugin(Plugin):
     def list_games(self, m, text):
         lib = self.library()
         if not lib:
-            return Result(speech="I don't have any games yet! Corey needs to "
+            return Result(speech="I don't have any games yet! Your dad needs to "
                                  "put some in my roms folder.")
         names = [t.title() for t, _, _ in lib[:12]]
         more = f", and {len(lib) - 12} more" if len(lib) > 12 else ""
@@ -51,7 +51,7 @@ class GamesPlugin(Plugin):
         lib = self.library()
         if not lib:
             if any(w in want for w in ("game", "mario", "zelda", "kirby", "nintendo")):
-                return Result(speech="I don't have any games yet! Corey needs to "
+                return Result(speech="I don't have any games yet! Your dad needs to "
                                      "put some in my roms folder.")
             return None   # not obviously a game request — let others/brain try
         titles = [t for t, _, _ in lib]
@@ -67,7 +67,7 @@ class GamesPlugin(Plugin):
             core = self.app.cfg.find_core(kind)
             if not core:
                 return Result(speech="Uh oh, my game-playing part is missing! "
-                                     "Corey, the emulator core is not installed.")
+                                     "Tell your dad the emulator core is not installed.")
             ok = self.app.launch_game(core, path, title.title())
             return Result(speech=f"Let's play {title.title()}! Here we go!" if ok
                           else "Hmm, the game would not start. Sorry!")

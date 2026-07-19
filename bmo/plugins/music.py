@@ -45,7 +45,7 @@ class MusicPlugin(Plugin):
     def play_any(self, m, text):
         files = self._files()
         if not files:
-            return Result(speech="My music folder is empty! Corey can put songs "
+            return Result(speech="My music folder is empty! Your dad can put songs "
                                  "in it and then we'll have a dance party.")
         ok = self._start(["--shuffle"] + files)
         return Result(speech="Music time!" if ok else "Hmm, my music player broke!")
@@ -53,7 +53,7 @@ class MusicPlugin(Plugin):
     def play_named(self, m, text):
         files = self._files()
         if not files:
-            return Result(speech="My music folder is empty! Corey can put songs in it.")
+            return Result(speech="My music folder is empty! Your dad can put songs in it.")
         want = m.group(1).lower()
         names = [os.path.splitext(os.path.basename(f))[0].lower() for f in files]
         scores = [difflib.SequenceMatcher(None, want, n).ratio() for n in names]
