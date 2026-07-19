@@ -176,9 +176,9 @@ class Face:
                 # middle, tapering to nothing at the edges.
                 n = len(lower)
                 seg = lower[n // 3: n - n // 3]
-                h = 16 + 26 * openness
+                dome_h = 16 + 26 * openness   # careful: 'h' is the screen height
                 m = len(seg) - 1
-                dome = [(x, y - 2 - h * math.sin(math.pi * i / m))
+                dome = [(x, y - 2 - dome_h * math.sin(math.pi * i / m))
                         for i, (x, y) in enumerate(seg)]
                 tongue = [(x, y - 2) for x, y in seg] + list(reversed(dome))
                 pygame.gfxdraw.filled_polygon(screen, [S(*p) for p in tongue], TONGUE)
