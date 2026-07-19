@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=BMO
+Comment=Your robot friend! Voice assistant and game launcher.
+Exec=/opt/bmo/install/bmo-run.sh
+Icon=/opt/bmo/assets/icon.png
+Terminal=false
+Categories=Game;AudioVideo;
+StartupNotify=false

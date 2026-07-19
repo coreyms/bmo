@@ -1,0 +1,7 @@
+# BMO runtime dependencies — verified available for Python 3.13 / linux-aarch64.
+pygame-ce==2.5.7
+vosk==0.3.45
+sounddevice==0.5.5
+piper-tts==1.5.0
+numpy>=2.0,<3
+requests>=2.32,<3

@@ -1,0 +1,54 @@
+# BMO configuration. Paths are relative to the BMO project root unless absolute.
+
+[display]
+width = 800          # design-space size; window scales to fit
+height = 480
+fps = 60
+fullscreen = true    # ignored when running with --dev
+show_captions = true # show heard/spoken text at the bottom of the screen
+
+[audio]
+input_device = ""    # substring of device name, "" = system default
+output_device = ""
+mic_rate = 16000
+
+[wake]
+# Phrases Vosk listens for while sleeping. Must be words the model knows;
+# "beemo" is likely out-of-vocabulary — these stand-ins get validated in Phase 3.
+phrases = ["beemo", "be mo", "b m o", "bee mo", "bmo"]
+window_seconds = 120     # conversation stays open this long after last exchange
+endpoint_silence = 1.2   # generous pause before we decide the kid is done talking
+
+[stt]
+engine = "vosk"
+vosk_model = "models/vosk-model-small-en-us-0.15"
+
+[tts]
+voice = "models/piper/en_US-amy-medium.onnx"
+pitch_semitones = 4.0    # sox pitch shift up toward BMO's register
+length_scale = 1.0       # >1.0 = slower speech
+
+[brain]
+host = "http://127.0.0.1:11434"
+model_big = "qwen2.5:3b"
+model_small = "llama3.2:1b"
+default = "big"
+max_history_messages = 12  # cap so prefill stays cheap
+num_predict = 220
+temperature = 0.8
+
+[games]
+retroarch = "retroarch"
+core_nes = ""            # "" = auto-detect in /usr/lib/*/libretro/
+core_snes = ""
+roms_nes = "roms/nes"
+roms_snes = "roms/snes"
+
+[music]
+dir = "music"
+
+[weather]
+latitude = 0.0           # 0,0 = auto-locate via IP once and cache in var/
+longitude = 0.0
+location_name = ""
+fahrenheit = true
