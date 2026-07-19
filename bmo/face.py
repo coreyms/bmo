@@ -205,7 +205,7 @@ class Face:
     def _draw_dots(self, screen, S, SL):
         for i in range(3):
             pulse = (math.sin(self._t * 4 - i * 0.9) + 1) / 2
-            cx, cy = S(560 + i * 42, 120)
+            cx, cy = S(640 + i * 42, 55)
             pygame.gfxdraw.filled_circle(screen, cx, cy, SL(6 + 5 * pulse), DARK)
 
     def _draw_ears_pulse(self, screen, S, SL):
