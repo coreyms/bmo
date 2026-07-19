@@ -45,6 +45,33 @@ MOUTH_Y = 300
 MOUTH_HALF_W = 92
 
 
+def _wrap_text(font, text, max_w):
+    """Word-wrap to max_w pixels; overlong single words get hard-broken."""
+    lines, cur = [], ""
+    for word in text.split():
+        while font.size(word)[0] > max_w:   # pathological single word
+            for i in range(len(word), 0, -1):
+                if font.size(word[:i])[0] <= max_w:
+                    if cur:
+                        lines.append(cur)
+                        cur = ""
+                    lines.append(word[:i])
+                    word = word[i:]
+                    break
+            else:
+                break
+        candidate = f"{cur} {word}".strip()
+        if font.size(candidate)[0] <= max_w:
+            cur = candidate
+        else:
+            if cur:
+                lines.append(cur)
+            cur = word
+    if cur:
+        lines.append(cur)
+    return lines or [""]
+
+
 def _bezier(p0, p1, p2, n=26):
     pts = []
     for i in range(n + 1):
@@ -226,14 +253,18 @@ class Face:
         if not self.cfg.get("display", "show_captions", True):
             return
         font = self._get_font(max(14, int(20 * scale)))
-        y = h - 8
+        max_w = int(w * 0.92)
+        y = h - max(6, int(8 * scale))
         for text, alpha in ((self.caption_bottom, 255), (self.caption_top, 170)):
             if not text:
                 continue
-            surf = font.render(text[-90:], True, CAPTION)
-            surf.set_alpha(alpha)
-            y -= surf.get_height() + 4
-            screen.blit(surf, ((w - surf.get_width()) // 2, y))
+            lines = _wrap_text(font, text, max_w)[-3:]  # newest lines win
+            for line in reversed(lines):                # stack upward
+                surf = font.render(line, True, CAPTION)
+                surf.set_alpha(alpha)
+                y -= surf.get_height() + 2
+                screen.blit(surf, ((w - surf.get_width()) // 2, y))
+            y -= max(3, int(4 * scale))
 
     def _get_font(self, size):
         key = ("f", size)
