@@ -19,8 +19,9 @@ class JokesPlugin(Plugin):
 
     def joke(self, m, text):
         return Result(brain_text=text,
-                      style_hint="Respond with one short, genuinely funny joke or riddle "
-                                 "an 11-year-old would love. If a riddle, ask if they want the answer.")
+                      style_hint="Respond with exactly ONE short, genuinely funny joke or riddle "
+                                 "an 11-year-old would love, then stop. If a riddle, ask if they "
+                                 "want the answer.")
 
     def twenty(self, m, text):
         return Result(brain_text=text,

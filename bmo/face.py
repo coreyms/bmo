@@ -162,21 +162,25 @@ class Face:
             lower = _bezier(right, lo_ctrl, left)
             poly = [S(*pt) for pt in upper + lower]
             pygame.gfxdraw.filled_polygon(screen, poly, MOUTH_INSIDE if openness > 0.3 else DARK)
+            if openness > 0.3:
+                # Teeth: a strip hanging from the *actual* upper-lip curve
+                # (sampled from it, so it can never poke outside the mouth).
+                n = len(upper)
+                seg = upper[n // 5: n - n // 5]
+                depth = 8 + 16 * openness
+                teeth = ([(x, y + 2) for x, y in seg]
+                         + [(x, y + 2 + depth) for x, y in reversed(seg)])
+                pygame.gfxdraw.filled_polygon(screen, [S(*p) for p in teeth], TEETH)
+            if openness > 0.5:
+                # Tongue: a band rising from the actual lower-lip curve.
+                n = len(lower)
+                seg = lower[n // 4: n - n // 4]
+                h = 14 + 22 * openness
+                tongue = ([(x, y - 2) for x, y in seg]
+                          + [(x, y - 2 - h) for x, y in reversed(seg)])
+                pygame.gfxdraw.filled_polygon(screen, [S(*p) for p in tongue], TONGUE)
             pygame.gfxdraw.aapolygon(screen, poly, DARK)
             pygame.draw.lines(screen, DARK, True, poly, SL(4))
-            if openness > 0.3:
-                # teeth strip under the upper lip
-                tw = half_w * 0.86
-                tt = [S(*pt) for pt in _bezier((400 - tw, MOUTH_Y + 2 + 16 * curve - 40 * openness),
-                                               (400, MOUTH_Y + 14 * curve - 30 * openness),
-                                               (400 + tw, MOUTH_Y + 2 + 16 * curve - 40 * openness))]
-                tb = [S(400 + tw, MOUTH_Y + 12 * curve - 12 * openness),
-                      S(400 - tw, MOUTH_Y + 12 * curve - 12 * openness)]
-                pygame.gfxdraw.filled_polygon(screen, tt + tb, TEETH)
-            if openness > 0.5:
-                # tongue
-                tx, ty = S(400, MOUTH_Y + 60 * curve + 78 * openness)
-                pygame.gfxdraw.filled_ellipse(screen, tx, ty, SL(half_w * 0.4), SL(26 * openness), TONGUE)
 
         # State decorations
         if self.expression == "sleeping":

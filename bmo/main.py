@@ -130,32 +130,47 @@ class App:
         text = text.strip()
         if not text:
             return
+        # A new request preempts whatever BMO is saying or thinking about.
+        if self.voice.busy() or self._worker_busy:
+            self.brain.interrupt.set()
+            self.voice.stop()
+        try:
+            while True:
+                self.work_q.get_nowait()
+        except queue.Empty:
+            pass
         self.logger.log("user", text)
         self.face.caption_top = f"You: {text}"
         self.set_state(THINKING)
         self.work_q.put(text)
 
+    _worker_busy = False
+
     def _worker(self):
         while True:
             text = self.work_q.get()
+            self._worker_busy = True
             try:
-                res = self.router.route(text)
-            except Exception as e:
-                self.logger.log("error", f"router: {e}")
-                continue
-            if res.speech:
-                self.logger.log("bmo", res.speech)
-                self.voice.say(res.speech)
-            elif res.brain_text:
-                reply = []
-                for sentence in self.brain.stream_sentences(res.brain_text, res.style_hint):
-                    self.voice.say(sentence)
-                    reply.append(sentence)
-                if reply:
-                    self.logger.log("bmo", " ".join(reply), model=self.brain.model)
-            else:
-                # handled silently (stop/sleep) — return to listening if awake
-                self.events.put(("idle", None))
+                try:
+                    res = self.router.route(text)
+                except Exception as e:
+                    self.logger.log("error", f"router: {e}")
+                    continue
+                if res.speech:
+                    self.logger.log("bmo", res.speech)
+                    self.voice.say(res.speech)
+                elif res.brain_text:
+                    reply = []
+                    for sentence in self.brain.stream_sentences(res.brain_text, res.style_hint):
+                        self.voice.say(sentence)
+                        reply.append(sentence)
+                    if reply:
+                        self.logger.log("bmo", " ".join(reply), model=self.brain.model)
+                else:
+                    # handled silently (stop/sleep) — return to listening if awake
+                    self.events.put(("idle", None))
+            finally:
+                self._worker_busy = False
 
     def announce(self, text):
         """Out-of-band speech (timer/alarm firing) — even during games."""
