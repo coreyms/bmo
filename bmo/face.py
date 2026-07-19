@@ -172,12 +172,15 @@ class Face:
                          + [(x, y + 2 + depth) for x, y in reversed(seg)])
                 pygame.gfxdraw.filled_polygon(screen, [S(*p) for p in teeth], TEETH)
             if openness > 0.5:
-                # Tongue: a band rising from the actual lower-lip curve.
+                # Tongue: a dome rising from the lower lip — tallest in the
+                # middle, tapering to nothing at the edges.
                 n = len(lower)
-                seg = lower[n // 4: n - n // 4]
-                h = 14 + 22 * openness
-                tongue = ([(x, y - 2) for x, y in seg]
-                          + [(x, y - 2 - h) for x, y in reversed(seg)])
+                seg = lower[n // 3: n - n // 3]
+                h = 16 + 26 * openness
+                m = len(seg) - 1
+                dome = [(x, y - 2 - h * math.sin(math.pi * i / m))
+                        for i, (x, y) in enumerate(seg)]
+                tongue = [(x, y - 2) for x, y in seg] + list(reversed(dome))
                 pygame.gfxdraw.filled_polygon(screen, [S(*p) for p in tongue], TONGUE)
             pygame.gfxdraw.aapolygon(screen, poly, DARK)
             pygame.draw.lines(screen, DARK, True, poly, SL(4))

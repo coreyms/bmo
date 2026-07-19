@@ -171,6 +171,7 @@ class App:
                     self.events.put(("idle", None))
             finally:
                 self._worker_busy = False
+                self.events.put(("done", None))
 
     def announce(self, text):
         """Out-of-band speech (timer/alarm firing) — even during games."""
@@ -325,7 +326,15 @@ class App:
                 self.face.caption_bottom = f"BMO: {payload}"
             elif kind == "speak_end":
                 self.ears.mute(False)
-                if self.state == SPEAKING:
+                # Only leave SPEAKING when the whole reply is finished —
+                # between-sentence gaps must not flap the state/expression.
+                if (self.state == SPEAKING and not self._worker_busy
+                        and not self.voice.busy()):
+                    self.set_state(LISTENING)
+                    self.window_deadline = time.time() + self.cfg.get(
+                        "wake", "window_seconds", 120)
+            elif kind == "done":
+                if self.state in (SPEAKING, THINKING) and not self.voice.busy():
                     self.set_state(LISTENING)
                     self.window_deadline = time.time() + self.cfg.get(
                         "wake", "window_seconds", 120)
