@@ -38,8 +38,8 @@ GREETINGS = ["Yes? I'm listening!", "Hi! What's up?", "BMO is here!",
 
 # Spoken instantly when a request heads to the LLM — masks thinking time.
 # After first use these are cached audio, so they start in milliseconds.
-THINKING_ACKS = ["Hmm, let me think!", "Ooh, good one!", "Okay okay, thinking!",
-                 "Let me use my robot brain!", "Hmm hmm hmm..."]
+THINKING_ACKS = ["Hmm, let me think!", "Okay okay, thinking!", "Thinking thinking...",
+                 "Let me use my robot brain!", "Hmm hmm hmm...", "One second, computing!"]
 
 CORNER = 90          # px hot corner (top-right) for the parent escape hatch
 HOLD_SECS = 5.0
@@ -150,6 +150,7 @@ class App:
         self.work_q.put(text)
 
     _worker_busy = False
+    _last_ack = None
 
     def _worker(self):
         while True:
@@ -166,7 +167,10 @@ class App:
                     for part in res.speech.split("\n"):   # \n = beat between parts
                         self.voice.say(part)
                 elif res.brain_text:
-                    self.voice.say(random.choice(THINKING_ACKS))
+                    # never the same ack twice in a row — kids notice
+                    choices = [a for a in THINKING_ACKS if a != self._last_ack]
+                    self._last_ack = random.choice(choices)
+                    self.voice.say(self._last_ack)
                     reply = []
                     for sentence in self.brain.stream_sentences(res.brain_text, res.style_hint):
                         self.voice.say(sentence)

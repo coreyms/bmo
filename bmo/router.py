@@ -69,7 +69,7 @@ class Router:
         """Returns a Result. Falls through to the brain when nothing matches."""
         text = normalize(raw_text)
         if not text:
-            return Result()
+            text = "hi"          # a bare "BMO!" is a greeting, not silence
         for plugin in self.plugins:
             try:
                 res = plugin.handle(text)
