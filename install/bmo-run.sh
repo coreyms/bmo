@@ -10,9 +10,12 @@ window_start=$(date +%s)
 while true; do
     .venv/bin/python -m bmo.main "$@"
     code=$?
-    if [ "$code" -eq 0 ] || [ "$code" -eq 3 ]; then
+    if [ "$code" -eq 0 ]; then
         exit 0
     fi
+    # exit 3 = lock held; usually the old instance is still shutting down.
+    # Give it a moment and retry — the crash counter still bounds this.
+    [ "$code" -eq 3 ] && sleep 2
     now=$(date +%s)
     if [ $((now - window_start)) -gt 60 ]; then
         crashes=0
