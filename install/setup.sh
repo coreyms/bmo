@@ -30,12 +30,17 @@ if [ ! -f models/piper/en_US-amy-medium.onnx ]; then
     cd /opt/bmo
 fi
 
-echo "== desktop integration =="
+echo "== desktop integration (systemd user service) =="
 sudo cp install/bmo.desktop /usr/share/applications/bmo.desktop
-sudo mkdir -p /home/sylas/.config/autostart
-sudo cp install/bmo.desktop /home/sylas/.config/autostart/bmo.desktop
-sudo chown -R sylas:sylas /home/sylas/.config/autostart
+sudo mkdir -p /home/sylas/.config/systemd/user
+sudo cp install/bmo.service /home/sylas/.config/systemd/user/bmo.service
+sudo chown -R sylas:sylas /home/sylas/.config/systemd
+sudo rm -f /home/sylas/.config/autostart/bmo.desktop
+sudo systemctl -M sylas@ --user daemon-reload
+sudo systemctl -M sylas@ --user enable bmo
 chmod +x install/bmo-run.sh
+sudo chgrp -R bmo /opt/bmo/var /opt/bmo/logs 2>/dev/null || true
+sudo chmod -R g+ws /opt/bmo/var /opt/bmo/logs 2>/dev/null || true
 
 echo "== retroarch: quit hotkey (Select+Start) =="
 for user in sylas corey; do

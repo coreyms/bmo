@@ -25,8 +25,14 @@ vosk_model = "models/vosk-model-small-en-us-0.15"
 
 [tts]
 voice = "models/piper/en_US-amy-medium.onnx"
-pitch_semitones = 4.0    # sox pitch shift up toward BMO's register
+pitch_semitones = 4.0    # pitch-up via playback rate (free, no processing)
 length_scale = 1.0       # >1.0 = slower speech
+
+# Words the TTS engine reads wrong -> how to actually say them.
+# Captions keep the real spelling; only the audio uses these.
+[tts.pronounce]
+Sylas = "Silas"
+BMO = "Beemo"
 
 [brain]
 host = "http://127.0.0.1:11434"

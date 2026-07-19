@@ -1,17 +1,26 @@
-"""BMO's voice: Piper TTS -> sox pitch shift -> playback with envelope lip sync.
+"""BMO's voice: in-process Piper TTS -> playback-rate pitch shift -> envelope
+lip sync, with a persistent disk cache so repeated lines play instantly.
 
-Each sentence is fully synthesized before it plays, so the mouth track
-(one openness value per 20ms) is precomputed and playback just indexes it.
-With no output device present (pre-hardware), everything still runs — the
-mouth animates silently, which is exactly what we demo before the speaker
-arrives.
+Speed design (this pipeline was painfully slow as a per-sentence CLI):
+- The Piper model loads ONCE and stays in memory (~2-3s saved per sentence).
+- Pitch is done by playing samples at a higher rate (free, no sox pass);
+  synthesis is slowed by the same factor so speech stays a natural speed.
+- Every synthesized sentence is cached in var/tts-cache/ keyed by text+voice;
+  cache hits skip synthesis entirely.
+- A pronunciation table (config [tts.pronounce]) fixes words the engine
+  reads wrong (Sylas -> "Silas") at the speech layer only — captions still
+  show the real spelling.
+
+With no output device present, everything still runs silently (the mouth
+animates), so the face demo works before hardware arrives.
 """
 
+import hashlib
 import math
 import os
 import queue
+import re
 import subprocess
-import tempfile
 import threading
 import time
 import wave
@@ -60,12 +69,31 @@ class Voice:
         self.interrupt = threading.Event()
         self.speaking = threading.Event()
         self.voice_path = cfg.path(cfg.get("tts", "voice", ""))
-        self.pitch_cents = int(float(cfg.get("tts", "pitch_semitones", 4.0)) * 100)
+        semis = float(cfg.get("tts", "pitch_semitones", 4.0))
+        self.pitch_factor = 2 ** (semis / 12.0)
         self.length_scale = float(cfg.get("tts", "length_scale", 1.0))
+        self.pronounce = dict(cfg.get("tts", "pronounce", {}) or {})
+        self.cache_dir = os.path.join(cfg.root, "var", "tts-cache")
+        os.makedirs(self.cache_dir, exist_ok=True)
+        self._piper = None                # loaded lazily, kept forever
+        self._piper_lock = threading.Lock()
         self._have_tts = os.path.exists(self.voice_path or "")
         self._have_audio = self._detect_output()
         self.worker = threading.Thread(target=self._run, daemon=True, name="voice")
         self.worker.start()
+        if self._have_tts:
+            threading.Thread(target=self._preload, daemon=True,
+                             name="voice-preload").start()
+
+    def _preload(self):
+        """Load the TTS model at startup so the first sentence isn't slow."""
+        try:
+            self._ensure_piper()
+            if self.logger:
+                self.logger.log("info", "voice: piper model loaded")
+        except Exception as e:
+            if self.logger:
+                self.logger.log("error", f"voice preload: {e}")
 
     def _detect_output(self):
         if sd is None:
@@ -130,44 +158,107 @@ class Voice:
     def _speak_one(self, sentence):
         samples, rate = self._synthesize(sentence)
         if samples is None:
-            # No TTS available: simulate mouth from text so the face demo works.
             self._mouth_only(sentence)
             return
-        env = compute_envelope(samples, rate)
+        # Pitch shift for free: play faster than synthesized. Synthesis is
+        # slowed by the same factor (see _synth_fresh) so pacing stays right.
+        playback_rate = int(rate * self.pitch_factor)
+        env = compute_envelope(samples, playback_rate)
         if self._have_audio or self.refresh_audio():
-            self._play_with_mouth(samples, rate, env)
+            self._play_with_mouth(samples, playback_rate, env)
         else:
             self._mouth_from_env(env)
 
     # ------------------------------------------------------------------- tts
+    def _spoken_text(self, text):
+        """Apply the pronunciation table (word-boundary, case-insensitive)."""
+        for word, said in self.pronounce.items():
+            text = re.sub(rf"\b{re.escape(word)}\b", said, text, flags=re.I)
+        return text
+
+    def _cache_path(self, spoken):
+        key = hashlib.sha1(
+            f"{os.path.basename(self.voice_path)}|{self.length_scale}|{spoken}"
+            .encode()).hexdigest()
+        return os.path.join(self.cache_dir, key + ".wav")
+
     def _synthesize(self, text):
-        """Piper CLI -> wav -> optional sox pitch shift -> (int16 samples, rate)."""
+        """-> (int16 samples, sample_rate) or (None, 0)."""
         if not self._have_tts:
             return None, 0
+        spoken = self._spoken_text(text)
+        path = self._cache_path(spoken)
         try:
-            with tempfile.TemporaryDirectory(prefix="bmo-tts-") as td:
-                raw = os.path.join(td, "raw.wav")
-                out = os.path.join(td, "out.wav")
-                cmd = [os.path.join(self.cfg.root, ".venv", "bin", "piper"),
-                       "--model", self.voice_path, "--output_file", raw]
-                if self.length_scale != 1.0:
-                    cmd += ["--length-scale", str(self.length_scale)]
-                subprocess.run(cmd, input=text.encode(), check=True,
-                               capture_output=True, timeout=60)
-                final = raw
-                if self.pitch_cents:
-                    r = subprocess.run(["sox", raw, out, "pitch", str(self.pitch_cents)],
-                                       capture_output=True, timeout=30)
-                    if r.returncode == 0:
-                        final = out
-                with wave.open(final, "rb") as w:
-                    rate = w.getframerate()
-                    data = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
-                return data, rate
+            if os.path.exists(path):
+                with wave.open(path, "rb") as w:
+                    return (np.frombuffer(w.readframes(w.getnframes()),
+                                          dtype=np.int16), w.getframerate())
+        except Exception:
+            pass                                    # bad cache file: resynth
+        try:
+            samples, rate = self._synth_fresh(spoken)
+            try:
+                with wave.open(path, "wb") as w:
+                    w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate)
+                    w.writeframes(samples.tobytes())
+            except Exception:
+                pass                                # cache write is best-effort
+            return samples, rate
         except Exception as e:
             if self.logger:
                 self.logger.log("error", f"tts: {e}")
             return None, 0
+
+    def _ensure_piper(self):
+        with self._piper_lock:
+            if self._piper is None:
+                from piper import PiperVoice
+                self._piper = PiperVoice.load(self.voice_path)
+        return self._piper
+
+    def _synth_fresh(self, spoken):
+        """In-process synthesis with the resident model; CLI as a fallback."""
+        ls = self.length_scale * self.pitch_factor
+        try:
+            piper = self._ensure_piper()
+            kwargs = {}
+            try:
+                from piper import SynthesisConfig
+                kwargs["syn_config"] = SynthesisConfig(length_scale=ls)
+            except ImportError:
+                pass
+            chunks, rate = [], None
+            try:
+                gen = piper.synthesize(spoken, **kwargs)
+            except TypeError:                       # API without syn_config
+                gen = piper.synthesize(spoken)
+            for ch in gen:
+                rate = getattr(ch, "sample_rate", rate)
+                buf = getattr(ch, "audio_int16_bytes", None)
+                if buf is None and isinstance(ch, (bytes, bytearray)):
+                    buf = bytes(ch)
+                if buf:
+                    chunks.append(buf)
+            if not chunks:
+                raise RuntimeError("piper API returned no audio")
+            return np.frombuffer(b"".join(chunks), dtype=np.int16), rate or 22050
+        except Exception as api_err:
+            if self.logger:
+                self.logger.log("info", f"tts api fallback: {api_err}")
+            return self._synth_cli(spoken, ls)
+
+    def _synth_cli(self, spoken, length_scale):
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="bmo-tts-") as td:
+            out = os.path.join(td, "out.wav")
+            cmd = [os.path.join(self.cfg.root, ".venv", "bin", "piper"),
+                   "--model", self.voice_path, "--output_file", out,
+                   "--length-scale", str(length_scale)]
+            subprocess.run(cmd, input=spoken.encode(), check=True,
+                           capture_output=True, timeout=60)
+            with wave.open(out, "rb") as w:
+                return (np.frombuffer(w.readframes(w.getnframes()),
+                                      dtype=np.int16), w.getframerate())
 
     # -------------------------------------------------------------- playback
     def _play_with_mouth(self, samples, rate, env):
@@ -195,7 +286,7 @@ class Voice:
         self.face.set_mouth_drive(0.0)
 
     def _mouth_from_env(self, env):
-        """No speaker yet: run the mouth track in real time, silently."""
+        """No speaker: run the mouth track in real time, silently."""
         t0 = time.monotonic()
         total = len(env) * FRAME_MS / 1000
         while time.monotonic() - t0 < total:

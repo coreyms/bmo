@@ -36,6 +36,11 @@ STATE_FACE = {SLEEPING: "sleeping", LISTENING: "listening",
 GREETINGS = ["Yes? I'm listening!", "Hi! What's up?", "BMO is here!",
              "Ooh hi! What are we doing?", "Ready for adventure!"]
 
+# Spoken instantly when a request heads to the LLM — masks thinking time.
+# After first use these are cached audio, so they start in milliseconds.
+THINKING_ACKS = ["Hmm, let me think!", "Ooh, good one!", "Okay okay, thinking!",
+                 "Let me use my robot brain!", "Hmm hmm hmm..."]
+
 CORNER = 90          # px hot corner (top-right) for the parent escape hatch
 HOLD_SECS = 5.0
 
@@ -158,8 +163,10 @@ class App:
                     continue
                 if res.speech:
                     self.logger.log("bmo", res.speech)
-                    self.voice.say(res.speech)
+                    for part in res.speech.split("\n"):   # \n = beat between parts
+                        self.voice.say(part)
                 elif res.brain_text:
+                    self.voice.say(random.choice(THINKING_ACKS))
                     reply = []
                     for sentence in self.brain.stream_sentences(res.brain_text, res.style_hint):
                         self.voice.say(sentence)

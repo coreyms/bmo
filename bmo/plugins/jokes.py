@@ -1,5 +1,9 @@
-"""Jokes, riddles, and word games: routed to the LLM with a steering hint.
-This is the 'plugin that augments the brain' pattern."""
+"""Jokes from a local bank (instant, pre-cachable audio) with LLM fallback;
+riddles, stories, and word games go to the LLM with a steering hint."""
+
+import json
+import os
+import random
 
 from bmo.router import Plugin, Result
 
@@ -10,7 +14,17 @@ class JokesPlugin(Plugin):
 
     def __init__(self, app):
         super().__init__(app)
-        self.add(r"\b(tell|say|know) (me |us )?(a |another |your best )?(joke|riddle)s?\b",
+        self.bank = []
+        self.used = set()
+        path = app.cfg.path("assets/jokes.json")
+        try:
+            with open(path) as f:
+                self.bank = json.load(f)
+        except Exception:
+            pass
+        self.add(r"\b(tell|say|know) (me |us )?(a |another |your best )?riddles?\b",
+                 self.riddle)
+        self.add(r"\b(tell|say|know) (me |us )?(a |another |your best )?jokes?\b",
                  self.joke)
         self.add(r"\bknock knock\b", self.joke)
         self.add(r"\b(play |let's play )?(twenty|20) questions\b", self.twenty)
@@ -18,6 +32,18 @@ class JokesPlugin(Plugin):
         self.add(r"\btell (me |us )?a story\b", self.story)
 
     def joke(self, m, text):
+        fresh = [i for i in range(len(self.bank)) if i not in self.used]
+        if not fresh:                      # bank exhausted: improvise via LLM
+            return self._llm_joke(text)
+        i = random.choice(fresh)
+        self.used.add(i)
+        j = self.bank[i]
+        return Result(speech=f"{j['setup']}\n{j['punch']}")
+
+    def riddle(self, m, text):
+        return self._llm_joke(text)
+
+    def _llm_joke(self, text):
         return Result(brain_text=text,
                       style_hint="Respond with exactly ONE short, genuinely funny joke or riddle "
                                  "an 11-year-old would love, then stop. If a riddle, ask if they "

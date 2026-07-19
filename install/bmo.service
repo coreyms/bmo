@@ -1,0 +1,18 @@
+[Unit]
+Description=BMO — robot friend
+After=graphical-session.target
+StartLimitIntervalSec=60
+StartLimitBurst=4
+
+[Service]
+WorkingDirectory=/opt/bmo
+# Wait for X before starting (autologin race at boot).
+ExecStartPre=/bin/sh -c 'for i in $(seq 60); do [ -e /tmp/.X11-unix/X0 ] && exit 0; sleep 0.5; done; exit 1'
+ExecStart=/opt/bmo/.venv/bin/python -m bmo.main
+Restart=on-failure
+RestartSec=2
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=%h/.Xauthority
+
+[Install]
+WantedBy=default.target
