@@ -197,6 +197,16 @@ class App:
                     for sentence in self.brain.stream_sentences(res.brain_text, res.style_hint):
                         if gen != self._gen:  # a newer prompt owns the stage now
                             break
+                        # last-resort output guard: the LLM must not wander
+                        # into unsafe territory either
+                        from bmo.plugins.safety import check as safety_check
+                        from bmo.router import normalize as _norm
+                        if safety_check(_norm(sentence)):
+                            self.brain.interrupt.set()
+                            self.logger.log("safety", sentence, tier="output")
+                            self.voice.say("Oops! My brain went somewhere weird. "
+                                           "Let's talk about something else!")
+                            break
                         self.voice.say(sentence)
                         reply.append(sentence)
                     if reply:
