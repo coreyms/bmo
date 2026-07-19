@@ -4,6 +4,12 @@
 # Exit 0 = clean quit (escape hatch). Exit 3 = another instance is running.
 
 cd /opt/bmo || exit 1
+
+# Only one supervisor, ever — a second invocation exits quietly. Prevents
+# leftover supervisors from stealing the app lock from each other's restarts.
+exec 9>"/tmp/bmo-supervisor-$(id -u).lock"
+flock -n 9 || exit 0
+
 crashes=0
 window_start=$(date +%s)
 
