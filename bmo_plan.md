@@ -85,7 +85,7 @@ This is robust, cheap, and looks right at 5" screen size. **Stretch upgrade (no 
 2. **Brain** *(no audio hardware needed)* — Ollama + both models, BMO personality prompt (short!), streaming chat via on-screen debug text entry, transcript logging, model-switch command, latency measurement.
 3. **Voice** *(after USB mic/speaker arrive)* — **first: wake-word validation with measured accept/reject rates (incl. Sylas's voice); switch to plan B if weak.** Then: Vosk STT endpointing, Piper voice with pitch shift, sentence-streaming playback with envelope lip sync, mic gating + touch-to-interrupt, full conversation loop with 2-min window and "BMO stop".
 4. **OS powers** — intent router + plugin system; RetroArch game launching + Bluetooth controller pairing + quit hotkey; timers/alarms (audible over games), music, weather, jokes mode.
-5. **Polish & stretch** — YouTube plugin, DSP visemes, custom openWakeWord "BMO" model, whisper.cpp STT upgrade, GB/GBA/Genesis cores, whatever Sylas dreams up.
+5. **Polish & stretch** — YouTube plugin, DSP visemes, custom openWakeWord "BMO" model, whisper.cpp STT upgrade, GB/GBA/Genesis cores, **long-term memory "diary" plugin** (BMO remembers facts about Sylas across days — a small facts file seeded into the prompt, since live context is a 12-message sliding window), whatever Sylas dreams up.
 
 ## Verification
 
