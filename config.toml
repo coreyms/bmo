@@ -13,9 +13,9 @@ output_device = ""
 mic_rate = 16000
 
 [wake]
-# Phrases Vosk listens for while sleeping. Must be words the model knows;
-# "beemo" is likely out-of-vocabulary — these stand-ins get validated in Phase 3.
-phrases = ["beemo", "be mo", "b m o", "bee mo", "bmo"]
+# Phrases Vosk listens for while sleeping. Must be words the model knows —
+# "beemo" itself is OOV (verified); these in-vocab stand-ins hit 5/6 in testing.
+phrases = ["bee mo", "be mo", "b m o", "bmo"]
 window_seconds = 120     # conversation stays open this long after last exchange
 endpoint_silence = 1.2   # generous pause before we decide the kid is done talking
 
