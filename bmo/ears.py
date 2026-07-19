@@ -11,6 +11,8 @@ the app falls back to touch + typed input.
 
 import json
 import queue
+import re
+import subprocess
 import threading
 
 try:
@@ -24,6 +26,31 @@ SetLogLevel(-1)  # keep Vosk quiet in our logs
 
 MODE_WAKE = "wake"
 MODE_LISTEN = "listen"
+
+
+def _real_source_exists():
+    """True if PipeWire lists at least one actual capture source. On systems
+    without wpctl (Mac dev boxes), assume yes and let PortAudio decide."""
+    try:
+        r = subprocess.run(["wpctl", "status"], capture_output=True,
+                           text=True, timeout=5)
+        if r.returncode != 0:
+            return True
+        in_sources = False
+        for line in r.stdout.splitlines():
+            if "Sources:" in line:
+                in_sources = True
+                continue
+            if in_sources:
+                if re.search(r"\d+\.", line):
+                    return True
+                if any(s in line for s in ("Filters:", "Streams:", "Sinks:")):
+                    return False
+        return False
+    except FileNotFoundError:
+        return True
+    except Exception:
+        return True
 
 
 class VoskEngine:
@@ -73,6 +100,12 @@ class Ears:
             device = self.cfg.get("audio", "input_device", "") or None
             if device:
                 device = self._match_device(device)
+            elif not _real_source_exists():
+                # PipeWire only offers a loopback monitor (e.g. TV audio) —
+                # opening it would make BMO listen to itself.
+                if self.logger:
+                    self.logger.log("info", "ears: no real microphone (only loopback)")
+                return False
             self._stream = sd.InputStream(
                 samplerate=self.engine.rate, channels=1, dtype="int16",
                 blocksize=int(self.engine.rate * 0.25), device=device,

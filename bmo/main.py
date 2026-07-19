@@ -135,7 +135,9 @@ class App:
         text = text.strip()
         if not text:
             return
-        # A new request preempts whatever BMO is saying or thinking about.
+        # A new request preempts whatever BMO is saying or thinking about:
+        # kill playing audio, queued audio, in-flight LLM stream, old subtitle.
+        self._gen += 1
         if self.voice.busy() or self._worker_busy:
             self.brain.interrupt.set()
             self.voice.stop()
@@ -144,6 +146,20 @@ class App:
                 self.work_q.get_nowait()
         except queue.Empty:
             pass
+        self.face.caption_bottom = ""
+        # Drop already-queued speech events (they'd repaint the old subtitle
+        # this same frame); keep everything that isn't speech bookkeeping.
+        keep = []
+        try:
+            while True:
+                ev = self.events.get_nowait()
+                if ev[0] not in ("speak_start", "speak_end", "idle", "done"):
+                    keep.append(ev)
+        except queue.Empty:
+            pass
+        for ev in keep:
+            self.events.put(ev)
+        self.ears.mute(False)     # a dropped speak_end can't leave the mic dead
         self.logger.log("user", text)
         self.face.caption_top = f"You: {text}"
         self.set_state(THINKING)
@@ -151,20 +167,26 @@ class App:
 
     _worker_busy = False
     _last_ack = None
+    _gen = 0          # bumped per submit; stale speech from older gens is dropped
 
     def _worker(self):
         while True:
             text = self.work_q.get()
             self._worker_busy = True
+            gen = self._gen
             try:
                 try:
                     res = self.router.route(text)
                 except Exception as e:
                     self.logger.log("error", f"router: {e}")
                     continue
+                if gen != self._gen:      # superseded while routing
+                    continue
                 if res.speech:
                     self.logger.log("bmo", res.speech)
                     for part in res.speech.split("\n"):   # \n = beat between parts
+                        if gen != self._gen:
+                            break
                         self.voice.say(part)
                 elif res.brain_text:
                     # never the same ack twice in a row — kids notice
@@ -173,6 +195,8 @@ class App:
                     self.voice.say(self._last_ack)
                     reply = []
                     for sentence in self.brain.stream_sentences(res.brain_text, res.style_hint):
+                        if gen != self._gen:  # a newer prompt owns the stage now
+                            break
                         self.voice.say(sentence)
                         reply.append(sentence)
                     if reply:

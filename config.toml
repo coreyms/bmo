@@ -31,7 +31,7 @@ length_scale = 1.0       # >1.0 = slower speech
 # Words the TTS engine reads wrong -> how to actually say them.
 # Captions keep the real spelling; only the audio uses these.
 [tts.pronounce]
-Sylas = "Silas"
+Sylas = "Sighless"   # espeak-verified: sˈaɪləs = "SIGH-less"
 BMO = "Beemo"
 
 [brain]
