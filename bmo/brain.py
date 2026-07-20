@@ -42,6 +42,11 @@ class Brain:
         self.logger = logger
         self.interrupt = threading.Event()
         self.lock = threading.Lock()
+        self.facts = []            # diary plugin fills this (see plugins/diary.py)
+
+    def set_facts(self, facts):
+        with self.lock:
+            self.facts = list(facts)
 
     @property
     def model(self):
@@ -66,7 +71,12 @@ class Brain:
 
     def _system(self):
         today = datetime.date.today().strftime("%A, %B %d, %Y")
-        return SYSTEM_PROMPT.format(date=today)
+        base = SYSTEM_PROMPT.format(date=today)
+        if self.facts:
+            quoted = " ".join(f'"{f}."' for f in self.facts)
+            base += ("\nYour diary — things Sylas asked you to remember, "
+                     "written in his own words: " + quoted)
+        return base
 
     def reset(self):
         with self.lock:
