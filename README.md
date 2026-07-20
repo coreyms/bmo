@@ -8,8 +8,8 @@ BMO boots straight into a fullscreen animated face and acts as the whole OS:
 
 - **Say "BMO"** (or touch the screen) to wake it, then just talk — a local LLM
   answers out loud. No cloud, works with zero internet.
-- **Launches NES, SNES, and Sega games by voice**: "BMO, play Super Mario
-  World" starts RetroArch fullscreen; quitting the game (Esc, the pad
+- **Launches NES, SNES, Sega, and Game Boy games by voice**: "BMO, play Super
+  Mario World" starts RetroArch fullscreen; quitting the game (Esc, the pad
   hotkey, or "BMO, stop the game") brings the face back.
 - Timers and alarms, jokes and word games, music, weather.
 - Conversations stay open ~2 minutes after the last exchange; "BMO, stop"
@@ -41,7 +41,8 @@ systemctl --user start bmo      # or stop / restart / status
   is attached.
 - Hold the **top-right corner for 5 seconds** (or press Escape): exit-to-desktop
   dialog for grown-ups.
-- Drop game ROMs in `roms/nes/`, `roms/snes/`, `roms/genesis/`, `roms/sms/`, or `roms/gamegear/`; songs in `music/`.
+- Drop game ROMs in `roms/nes/`, `roms/snes/`, `roms/genesis/`, `roms/sms/`,
+  `roms/gamegear/`, `roms/gb/`, or `roms/gbc/`; songs in `music/`.
 - Conversation transcripts land in `logs/` as JSONL.
 
 Fresh Pi setup from a clone:
@@ -51,9 +52,9 @@ sudo git clone https://github.com/coreyms/bmo /opt/bmo
 cd /opt/bmo && ./install/setup.sh
 ```
 
-The setup script installs apt packages (RetroArch + NES/SNES/Genesis cores,
-mpv, sox, portaudio), Ollama + both models, the Vosk and Piper models, the
-systemd user service, and the RetroArch quit hotkeys (Esc or Select+Start).
+The setup script installs apt packages (RetroArch + NES/SNES/Genesis/Game Boy
+cores, mpv, sox, portaudio), Ollama + both models, the Vosk and Piper models,
+the systemd user service, and the RetroArch quit hotkeys (Esc or Select+Start).
 
 > **Power matters**: a Pi 5 needs a real 5V/5A (27W) USB-C supply. Phone
 > chargers negotiate 15W and cause brownout crashes under LLM load.

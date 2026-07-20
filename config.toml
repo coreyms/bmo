@@ -50,11 +50,15 @@ core_snes = ""
 core_genesis = ""        # Genesis Plus GX also covers SMS + Game Gear
 core_sms = ""
 core_gamegear = ""
+core_gb = ""             # Gambatte covers Game Boy + Game Boy Color
+core_gbc = ""
 roms_nes = "roms/nes"
 roms_snes = "roms/snes"
 roms_genesis = "roms/genesis"
 roms_sms = "roms/sms"
 roms_gamegear = "roms/gamegear"
+roms_gb = "roms/gb"
+roms_gbc = "roms/gbc"
 
 [music]
 dir = "music"

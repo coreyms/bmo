@@ -11,7 +11,8 @@ import time
 from bmo.router import Plugin, Result
 
 ROM_EXTS = {".nes", ".sfc", ".smc", ".zip", ".fig",
-            ".md", ".gen", ".smd", ".bin", ".sms", ".gg"}
+            ".md", ".gen", ".smd", ".bin", ".sms", ".gg",
+            ".gb", ".gbc"}
 
 # Spoken system names -> library kind, and how BMO says each kind aloud.
 SYSTEM_WORDS = {"nes": "nes", "nintendo": "nes", "regular nintendo": "nes",
@@ -19,9 +20,12 @@ SYSTEM_WORDS = {"nes": "nes", "nintendo": "nes", "regular nintendo": "nes",
                 "genesis": "genesis", "sega genesis": "genesis",
                 "mega drive": "genesis", "sega": "genesis",
                 "master system": "sms", "sega master system": "sms", "sms": "sms",
-                "game gear": "gamegear", "gamegear": "gamegear"}
+                "game gear": "gamegear", "gamegear": "gamegear",
+                "game boy color": "gbc", "gameboy color": "gbc", "gbc": "gbc",
+                "game boy": "gb", "gameboy": "gb"}
 SYSTEM_SPOKEN = {"nes": "N E S", "snes": "Super Nintendo", "genesis": "Genesis",
-                 "sms": "Master System", "gamegear": "Game Gear"}
+                 "sms": "Master System", "gamegear": "Game Gear",
+                 "gb": "Game Boy", "gbc": "Game Boy Color"}
 SYSTEM_RX = re.compile(
     r"\s+(?:on|for)\s+(?:the\s+)?("
     + "|".join(sorted(SYSTEM_WORDS, key=len, reverse=True)) + r")$")
@@ -58,7 +62,7 @@ class GamesPlugin(Plugin):
         """[(spoken_title, path, kind)] scanned fresh each time — Corey may
         drop ROMs in while BMO is running."""
         out = []
-        for kind in ("nes", "snes", "genesis", "sms", "gamegear"):
+        for kind in ("nes", "snes", "genesis", "sms", "gamegear", "gb", "gbc"):
             d = self.app.cfg.path(self.app.cfg.get("games", f"roms_{kind}"))
             if not d or not os.path.isdir(d):
                 continue

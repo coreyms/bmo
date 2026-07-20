@@ -36,7 +36,9 @@ class Config:
         names = {"nes": "nestopia_libretro.so", "snes": "snes9x_libretro.so",
                  "genesis": "genesis_plus_gx_libretro.so",
                  "sms": "genesis_plus_gx_libretro.so",
-                 "gamegear": "genesis_plus_gx_libretro.so"}
+                 "gamegear": "genesis_plus_gx_libretro.so",
+                 "gb": "gambatte_libretro.so",
+                 "gbc": "gambatte_libretro.so"}
         hits = glob.glob(f"/usr/lib/*/libretro/{names[kind]}")
         return hits[0] if hits else None
 
