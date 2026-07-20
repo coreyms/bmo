@@ -247,6 +247,14 @@ class App:
         threading.Thread(target=_run, daemon=True, name="game").start()
         return True
 
+    def quit_game(self):
+        """Terminate a running game; the waiter thread fires game_over."""
+        p = self._game_proc
+        if p and p.poll() is None:
+            p.terminate()
+            return True
+        return False
+
     # ------------------------------------------------------------------ loop
     def run(self):
         clock = pygame.time.Clock()

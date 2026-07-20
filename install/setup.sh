@@ -42,16 +42,22 @@ chmod +x install/bmo-run.sh
 sudo chgrp -R bmo /opt/bmo/var /opt/bmo/logs 2>/dev/null || true
 sudo chmod -R g+ws /opt/bmo/var /opt/bmo/logs 2>/dev/null || true
 
-echo "== retroarch: quit hotkey (Select+Start) =="
+echo "== retroarch: quit hotkeys (Esc verified; Select+Start pending pad) =="
 for user in sylas corey; do
     dir=/home/$user/.config/retroarch
     sudo -u $user mkdir -p $dir
     cfg=$dir/retroarch.cfg
     sudo -u $user touch $cfg
-    sudo -u $user sed -i '/^input_enable_hotkey_btn\|^input_exit_emulator_btn/d' $cfg
-    # 8BitDo SNES pad: Select=6, Start=7 (verify with a pad connected)
-    echo 'input_enable_hotkey_btn = "6"' | sudo -u $user tee -a $cfg >/dev/null
-    echo 'input_exit_emulator_btn = "7"' | sudo -u $user tee -a $cfg >/dev/null
+    sudo -u $user sed -i '/^input_enable_hotkey_btn\|^input_exit_emulator_btn\|^input_exit_emulator \|^quit_press_twice\|^video_fullscreen/d' $cfg
+    {
+        # single-press Esc quit, verified on the Pi keyboard 2026-07-19
+        echo 'input_exit_emulator = "escape"'
+        echo 'quit_press_twice = "false"'
+        echo 'video_fullscreen = "true"'
+        # 8BitDo SNES pad: Select=6, Start=7 (verify with a pad connected)
+        echo 'input_enable_hotkey_btn = "6"'
+        echo 'input_exit_emulator_btn = "7"'
+    } | sudo -u $user tee -a $cfg >/dev/null
 done
 
 echo "Done. Reboot (or log in as sylas) and BMO starts automatically."

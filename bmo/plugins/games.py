@@ -22,6 +22,8 @@ class GamesPlugin(Plugin):
     def __init__(self, app):
         super().__init__(app)
         self.add(r"\bwhat games\b|\blist( my| the)? games\b", self.list_games)
+        self.add(r"\b(?:quit|exit|close|end)\s+(?:the\s+|this\s+)?game\b|\bstop playing\b",
+                 self.quit)
         self.add(r"\b(?:play|start|launch|open)\s+(?:the game\s+)?(.+)$", self.play)
 
     def library(self):
@@ -36,6 +38,11 @@ class GamesPlugin(Plugin):
                 if os.path.splitext(f)[1].lower() in ROM_EXTS:
                     out.append((clean_title(f), os.path.join(d, f), kind))
         return out
+
+    def quit(self, m, text):
+        if self.app.quit_game():
+            return Result(speech="Okay! Game over. Back to being BMO!")
+        return Result(speech="We aren't playing a game right now!")
 
     def list_games(self, m, text):
         lib = self.library()

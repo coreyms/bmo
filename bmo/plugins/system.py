@@ -25,9 +25,13 @@ class SystemPlugin(Plugin):
         self.add(r"\bwhat can you do\b|\bhelp me\b", self.help)
 
     # "stop" means different things depending on what's happening (plan:
-    # intent precedence). Order: talking > alarm > music > go to sleep.
+    # intent precedence). Order: talking > alarm > game > music > go to sleep.
     def stop(self, m, text):
         app = self.app
+        if "game" in text or "playing" in text:
+            if app.quit_game():
+                return Result(speech="Okay! Game over. Back to being BMO!")
+            return Result(speech="We aren't playing a game right now!")
         if app.voice.busy():
             app.voice.stop()
             return Result()
@@ -35,6 +39,8 @@ class SystemPlugin(Plugin):
         if timers is not None and timers.ringing:
             timers.dismiss()
             return Result(speech="Okay! Alarm off.")
+        if app.quit_game():
+            return Result(speech="Okay! Game over. Back to being BMO!")
         music = getattr(app, "music", None)
         if music is not None and music.playing():
             music.stop()
