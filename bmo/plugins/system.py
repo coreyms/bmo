@@ -56,21 +56,25 @@ class SystemPlugin(Plugin):
 
     def volume(self, delta):
         sign = "+" if delta > 0 else "-"
-        ok = self._pactl(f"{sign}{abs(delta)}%")
+        ok = self._set_volume(f"{abs(delta)}%{sign}", f"{sign}{abs(delta)}%")
         return Result(speech="Okay!" if ok else "I can't find my volume knob yet!")
 
     def volume_set(self, m, text):
         pct = max(0, min(100, int(m.group(2))))
-        ok = self._pactl(f"{pct}%")
+        ok = self._set_volume(f"{pct}%", f"{pct}%")
         return Result(speech=f"Volume {pct} percent!" if ok else "I can't find my volume knob yet!")
 
-    def _pactl(self, value):
-        try:
-            r = subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", value],
-                               capture_output=True, timeout=5)
-            return r.returncode == 0
-        except Exception:
-            return False
+    def _set_volume(self, wpctl_value, pactl_value):
+        # wpctl wants "10%+", pactl wants "+10%" — try PipeWire first.
+        for cmd in (["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", wpctl_value],
+                    ["pactl", "set-sink-volume", "@DEFAULT_SINK@", pactl_value]):
+            try:
+                r = subprocess.run(cmd, capture_output=True, timeout=5)
+                if r.returncode == 0:
+                    return True
+            except Exception:
+                pass
+        return False
 
     def switch_brain(self, m, text):
         which = "small" if m.group(1) in ("little", "small") else "big"

@@ -123,7 +123,7 @@ class TimersPlugin(Plugin):
                 self._ring_until = now + 30
                 self._chime()
                 if item["kind"] == "timer":
-                    self.app.announce(f"Ding ding ding! Your {item['label']} timer is done!")
+                    self.app.announce(f"Ding ding ding! Your timer for {item['label']} is done!")
                 else:
                     self.app.announce(f"Ding ding ding! It's {item['label']}! Alarm time!")
         if self.ringing and now > self._ring_until:
