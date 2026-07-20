@@ -56,7 +56,7 @@ for user in sylas corey; do
     sudo -u $user mkdir -p $dir
     cfg=$dir/retroarch.cfg
     sudo -u $user touch $cfg
-    sudo -u $user sed -i '/^input_enable_hotkey_btn\|^input_exit_emulator_btn\|^input_exit_emulator \|^quit_press_twice\|^video_fullscreen/d' $cfg
+    sudo -u $user sed -i '/^input_enable_hotkey_btn\|^input_exit_emulator_btn\|^input_exit_emulator \|^quit_press_twice\|^video_fullscreen\|^rewind_enable/d' $cfg
     {
         # single-press Esc quit, verified on the Pi keyboard 2026-07-19
         echo 'input_exit_emulator = "escape"'
@@ -65,6 +65,9 @@ for user in sylas corey; do
         # 8BitDo SNES pad: Select=6, Start=7 (verify with a pad connected)
         echo 'input_enable_hotkey_btn = "6"'
         echo 'input_exit_emulator_btn = "7"'
+        # rewind is off by default (CPU cost) but free on a Pi 5 with 8/16-bit
+        # cores; hold R to rewind. F2/F4 save/load state are RetroArch defaults.
+        echo 'rewind_enable = "true"'
     } | sudo -u $user tee -a $cfg >/dev/null
 done
 

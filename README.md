@@ -43,6 +43,8 @@ systemctl --user start bmo      # or stop / restart / status
   dialog for grown-ups.
 - Drop game ROMs in `roms/nes/`, `roms/snes/`, `roms/genesis/`, `roms/sms/`,
   `roms/gamegear/`, `roms/gb/`, or `roms/gbc/`; songs in `music/`.
+- In-game keys: **F2** save state, **F4** load state, hold **R** to rewind
+  time, **Esc** quit back to BMO.
 - Conversation transcripts land in `logs/` as JSONL.
 
 Fresh Pi setup from a clone:
