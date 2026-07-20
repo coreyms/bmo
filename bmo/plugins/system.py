@@ -15,7 +15,9 @@ class SystemPlugin(Plugin):
         super().__init__(app)
         self.add(r"^(stop|be quiet|quiet|shush|hush|shut up|never ?mind)\b", self.stop)
         self.add(r"\b(go to sleep|good ?night|see you later)\b", self.sleep)
-        self.add(r"\bwhat time is it\b|\bwhat's the time\b", self.time)
+        self.add(r"\bwhat time is it\b|\bwhat time it is\b|\bwhat(?:'s| is) the time\b"
+                 r"|\btell me the time\b|\bdo you know the time\b|\bcurrent time\b"
+                 r"|\bwhat does the clock say\b", self.time)
         self.add(r"\bwhat (day|date) is (it|today)\b|\bwhat's today\b", self.date)
         self.add(r"\b(volume up|louder|turn it up)\b", lambda m, t: self.volume(+10)),
         self.add(r"\b(volume down|quieter|too loud|turn it down)\b", lambda m, t: self.volume(-10))
@@ -28,6 +30,8 @@ class SystemPlugin(Plugin):
     # intent precedence). Order: talking > alarm > game > music > go to sleep.
     def stop(self, m, text):
         app = self.app
+        if "stopwatch" in text or "stop watch" in text:
+            return None          # fall through to the timers plugin
         if "game" in text or "playing" in text:
             if app.quit_game():
                 return Result(speech="Okay! Game over. Back to being BMO!")
@@ -98,6 +102,7 @@ class SystemPlugin(Plugin):
         return Result()
 
     def help(self, m, text):
-        return Result(speech="I can chat, tell jokes, set timers, play music, "
+        return Result(speech="I can chat, tell jokes, set timers and alarms, "
+                             "run a stopwatch, tell the time, play music, "
                              "check the weather, and start video games! "
-                             "Try saying: play a game, or set a timer for ten minutes!")
+                             "Try saying: play a game, or start the stopwatch!")

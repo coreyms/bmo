@@ -61,14 +61,21 @@ class GamesPlugin(Plugin):
                 return Result(speech="I don't have any games yet! Your dad needs to "
                                      "put some in my roms folder.")
             return None   # not obviously a game request — let others/brain try
-        titles = [t for t, _, _ in lib]
-        scored = [(difflib.SequenceMatcher(None, want, t).ratio(), i)
-                  for i, t in enumerate(titles)]
-        # a contained word bumps the score ("mario" inside "super mario world")
-        for i, t in enumerate(titles):
-            if want in t or all(w in t.split() for w in want.split()):
-                scored[i] = (max(scored[i][0], 0.85), i)
-        score, best = max(scored)
+        scored = []
+        for i, (t, path, _) in enumerate(lib):
+            r = difflib.SequenceMatcher(None, want, t).ratio()
+            if want == t:
+                r = 2.0          # exact title always wins
+            elif want in t or all(w in t.split() for w in want.split()):
+                # contained phrase bumps the score ("mario" inside "super
+                # mario world"); shorter titles win ties so "mario" finds
+                # "mario paint", not some 40-character spin-off
+                r = max(r, 0.85 + 0.14 * len(want) / len(t))
+            fname = os.path.basename(path).lower()
+            if r < 2.0 and "(j)" in fname and "(u" not in fname:
+                r -= 0.03        # near-tie: prefer the English release
+            scored.append((r, -len(t), i))
+        score, _, best = max(scored)
         title, path, kind = lib[best]
         if score >= 0.5:
             core = self.app.cfg.find_core(kind)

@@ -15,6 +15,23 @@ WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
          "a": 1, "an": 1, "half": 0.5}
 
 
+def _elapsed(secs):
+    """3725.4 -> '1 hour, 2 minutes and 5 seconds' (spoken-friendly)."""
+    secs = int(secs)
+    hours, rest = divmod(secs, 3600)
+    mins, s = divmod(rest, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if mins:
+        parts.append(f"{mins} minute{'s' if mins != 1 else ''}")
+    if s or not parts:
+        parts.append(f"{s} second{'s' if s != 1 else ''}")
+    if len(parts) == 1:
+        return parts[0]
+    return ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
 def parse_number(s):
     s = s.strip().lower()
     if re.fullmatch(r"\d+", s):
@@ -38,11 +55,20 @@ class TimersPlugin(Plugin):
         self.items = []       # dicts: due(epoch), label, kind
         self.ringing = None
         self._ring_until = 0
+        self.stopwatch = None      # epoch start, or None
         num = r"([\w ]+?)"
         self.add(rf"\bset a timer for {num} (second|minute|hour)s?\b", self.set_timer)
         self.add(rf"\btimer for {num} (second|minute|hour)s?\b", self.set_timer)
         self.add(r"\bset an alarm for (.+)$", self.set_alarm)
         self.add(r"\b(cancel|clear|delete) (the |my |all )?(timers?|alarms?)\b", self.cancel)
+        # stopwatch intents outrank `remaining` — "how long has it been" is
+        # a stopwatch question first, a timer question only as fallback
+        self.add(r"\b(start|begin|set) (a |the |my )?stop ?watch\b|^stop ?watch$",
+                 self.stopwatch_start)
+        self.add(r"\b(stop|end|cancel|reset|clear) (the |my )?stop ?watch\b",
+                 self.stopwatch_stop)
+        self.add(r"\bhow long has it been\b|\bcheck (the |my )?stop ?watch\b",
+                 self.stopwatch_check)
         self.add(r"\bhow (much time|long)( is left)?\b|\bcheck (the |my )?timer\b", self.remaining)
 
     def set_timer(self, m, text):
@@ -93,11 +119,35 @@ class TimersPlugin(Plugin):
             hour = 0
         return (hour, minute)
 
+    # ------------------------------------------------------------- stopwatch
+    def stopwatch_start(self, m, text):
+        if self.stopwatch is not None:
+            return Result(speech=f"The stopwatch is already going — "
+                                 f"{_elapsed(time.time() - self.stopwatch)} so far!")
+        self.stopwatch = time.time()
+        return Result(speech="Stopwatch started! Go go go!")
+
+    def stopwatch_stop(self, m, text):
+        if self.stopwatch is None:
+            return Result(speech="The stopwatch isn't running! Say start the "
+                                 "stopwatch to begin.")
+        s = _elapsed(time.time() - self.stopwatch)
+        self.stopwatch = None
+        return Result(speech=f"Stopwatch stopped at {s}! Nice one!")
+
+    def stopwatch_check(self, m, text):
+        if self.stopwatch is not None:
+            return Result(speech=f"The stopwatch says {_elapsed(time.time() - self.stopwatch)}!")
+        if self.items:
+            return self.remaining(m, text)
+        return Result(speech="I'm not timing anything right now!")
+
     def cancel(self, m, text):
         n = len(self.items)
+        word = "alarm" if {i["kind"] for i in self.items} == {"alarm"} else "timer"
         self.items.clear()
         self.dismiss()
-        return Result(speech=f"Poof! {n} {'timer' if n == 1 else 'timers'} cancelled." if n
+        return Result(speech=f"Poof! {n} {word}{'s' if n != 1 else ''} cancelled." if n
                       else "There's nothing to cancel! Easy job.")
 
     def remaining(self, m, text):
