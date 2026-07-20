@@ -33,7 +33,10 @@ class Config:
         configured = self.get("games", f"core_{kind}", "")
         if configured:
             return self.path(configured)
-        names = {"nes": "nestopia_libretro.so", "snes": "snes9x_libretro.so"}
+        names = {"nes": "nestopia_libretro.so", "snes": "snes9x_libretro.so",
+                 "genesis": "genesis_plus_gx_libretro.so",
+                 "sms": "genesis_plus_gx_libretro.so",
+                 "gamegear": "genesis_plus_gx_libretro.so"}
         hits = glob.glob(f"/usr/lib/*/libretro/{names[kind]}")
         return hits[0] if hits else None
 

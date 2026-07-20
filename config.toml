@@ -47,8 +47,14 @@ temperature = 0.8
 retroarch = "retroarch"
 core_nes = ""            # "" = auto-detect in /usr/lib/*/libretro/
 core_snes = ""
+core_genesis = ""        # Genesis Plus GX also covers SMS + Game Gear
+core_sms = ""
+core_gamegear = ""
 roms_nes = "roms/nes"
 roms_snes = "roms/snes"
+roms_genesis = "roms/genesis"
+roms_sms = "roms/sms"
+roms_gamegear = "roms/gamegear"
 
 [music]
 dir = "music"

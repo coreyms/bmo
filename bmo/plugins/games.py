@@ -6,7 +6,8 @@ import re
 
 from bmo.router import Plugin, Result
 
-ROM_EXTS = {".nes", ".sfc", ".smc", ".zip", ".fig"}
+ROM_EXTS = {".nes", ".sfc", ".smc", ".zip", ".fig",
+            ".md", ".gen", ".smd", ".bin", ".sms", ".gg"}
 JUNK = re.compile(r"\(.*?\)|\[.*?\]|\.[^.]+$")
 
 
@@ -30,9 +31,9 @@ class GamesPlugin(Plugin):
         """[(spoken_title, path, kind)] scanned fresh each time — Corey may
         drop ROMs in while BMO is running."""
         out = []
-        for kind in ("nes", "snes"):
+        for kind in ("nes", "snes", "genesis", "sms", "gamegear"):
             d = self.app.cfg.path(self.app.cfg.get("games", f"roms_{kind}"))
-            if not os.path.isdir(d):
+            if not d or not os.path.isdir(d):
                 continue
             for f in sorted(os.listdir(d)):
                 if os.path.splitext(f)[1].lower() in ROM_EXTS:

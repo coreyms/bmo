@@ -8,8 +8,9 @@ BMO boots straight into a fullscreen animated face and acts as the whole OS:
 
 - **Say "BMO"** (or touch the screen) to wake it, then just talk — a local LLM
   answers out loud. No cloud, works with zero internet.
-- **Launches NES/SNES games by voice**: "BMO, play Super Mario World" starts
-  RetroArch fullscreen; quitting the game brings the face back.
+- **Launches NES, SNES, and Sega games by voice**: "BMO, play Super Mario
+  World" starts RetroArch fullscreen; quitting the game (Esc, the pad
+  hotkey, or "BMO, stop the game") brings the face back.
 - Timers and alarms, jokes and word games, music, weather.
 - Conversations stay open ~2 minutes after the last exchange; "BMO, stop"
   puts it back to sleep.
@@ -28,11 +29,11 @@ Everything is configured in [`config.toml`](config.toml).
 
 ## Running on the Pi
 
-BMO autostarts on boot (it's in `~/.config/autostart` for the main user) and
-appears in the Start Menu as **BMO**. Manual launch:
+BMO runs as a systemd user service: it autostarts on boot, restarts itself
+after a crash, and appears in the Start Menu as **BMO**. Manual control:
 
 ```
-/opt/bmo/install/bmo-run.sh
+systemctl --user start bmo      # or stop / restart / status
 ```
 
 - Touch anywhere: wake BMO / interrupt it mid-sentence.
@@ -40,7 +41,7 @@ appears in the Start Menu as **BMO**. Manual launch:
   is attached.
 - Hold the **top-right corner for 5 seconds** (or press Escape): exit-to-desktop
   dialog for grown-ups.
-- Drop game ROMs in `roms/nes/` and `roms/snes/`; songs in `music/`.
+- Drop game ROMs in `roms/nes/`, `roms/snes/`, `roms/genesis/`, `roms/sms/`, or `roms/gamegear/`; songs in `music/`.
 - Conversation transcripts land in `logs/` as JSONL.
 
 Fresh Pi setup from a clone:
@@ -50,9 +51,9 @@ sudo git clone https://github.com/coreyms/bmo /opt/bmo
 cd /opt/bmo && ./install/setup.sh
 ```
 
-The setup script installs apt packages (RetroArch + cores, mpv, sox,
-portaudio), Ollama + both models, the Vosk and Piper models, the desktop
-entry/autostart, and the RetroArch quit hotkey (Select+Start).
+The setup script installs apt packages (RetroArch + NES/SNES/Genesis cores,
+mpv, sox, portaudio), Ollama + both models, the Vosk and Piper models, the
+systemd user service, and the RetroArch quit hotkeys (Esc or Select+Start).
 
 > **Power matters**: a Pi 5 needs a real 5V/5A (27W) USB-C supply. Phone
 > chargers negotiate 15W and cause brownout crashes under LLM load.

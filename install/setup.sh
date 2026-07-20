@@ -7,6 +7,7 @@ cd /opt/bmo
 
 echo "== apt packages =="
 sudo apt-get install -y retroarch libretro-nestopia libretro-snes9x \
+    libretro-genesisplusgx \
     libretro-core-info retroarch-assets mpv sox libportaudio2 python3-venv
 
 echo "== python venv =="
