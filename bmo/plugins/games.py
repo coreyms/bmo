@@ -6,6 +6,7 @@ we have", "do we have sonic", "play aladdin on genesis"."""
 import difflib
 import os
 import re
+import time
 
 from bmo.router import Plugin, Result
 
@@ -38,6 +39,12 @@ class GamesPlugin(Plugin):
 
     def __init__(self, app):
         super().__init__(app)
+        self._more = None      # unread tail of a long listing + timestamp
+        self.add(r"^(?:yes|yeah|yep|sure|okay|ok|more|yes please|more please|"
+                 r"tell me more|keep going|hear more|the rest|what else)$",
+                 self.hear_more)
+        self.add(r"^(?:no|nope|nah|no thanks|no thank you|that's enough|"
+                 r"i'm good)$", self.no_more)
         self.add(r"\bwhat games\b|\blist( my| the)? games\b", self.list_games)
         self.add(r"\b(?:what|which)\s+(.+?)\s+games?(?:\s+(?:do (?:we|you|i) have|"
                  r"are there|have we got))?$", self.search)
@@ -73,20 +80,52 @@ class GamesPlugin(Plugin):
         return sorted({t for t, _, _ in lib
                        if all(w in t.split() for w in words)})
 
-    def _spoken_hits(self, hits, lib, cap=8):
+    def _format_names(self, hits, lib):
+        """Spoken name per title; duplicates across systems get labeled."""
         kinds = {}
         for t, _, k in lib:
             kinds.setdefault(t, set()).add(k)
-        parts = []
-        for t in hits[:cap]:
+        out = []
+        for t in hits:
             ks = sorted(kinds.get(t, ()))
             if len(ks) > 1:
-                parts.append(f"{t.title()} on "
-                             + " and ".join(SYSTEM_SPOKEN[k] for k in ks))
+                out.append(f"{t.title()} on "
+                           + " and ".join(SYSTEM_SPOKEN[k] for k in ks))
             else:
-                parts.append(t.title())
-        more = f", and {len(hits) - cap} more" if len(hits) > cap else ""
-        return ", ".join(parts) + more
+                out.append(t.title())
+        return out
+
+    CHUNK = 8
+
+    def _speak_list(self, intro, names):
+        """Speak the first chunk; long lists park the rest behind a question."""
+        chunk = ", ".join(names[:self.CHUNK])
+        if len(names) <= self.CHUNK:
+            self._more = None
+            return Result(speech=f"{intro} {chunk}.")
+        self._more = {"names": names, "pos": self.CHUNK, "at": time.time()}
+        return Result(speech=f"{intro} {chunk}. That's {self.CHUNK} of "
+                             f"{len(names)} — want to hear more?")
+
+    def hear_more(self, m, text):
+        p = self._more
+        if not p or time.time() - p["at"] > 120:
+            return None            # nothing pending — not our "yes"
+        chunk = p["names"][p["pos"]:p["pos"] + self.CHUNK]
+        p["pos"] += len(chunk)
+        p["at"] = time.time()
+        left = len(p["names"]) - p["pos"]
+        if left > 0:
+            return Result(speech=f"{', '.join(chunk)}. "
+                                 f"{left} more to go — keep going?")
+        self._more = None
+        return Result(speech=f"{', '.join(chunk)}. And that's all of them!")
+
+    def no_more(self, m, text):
+        if self._more:
+            self._more = None
+            return Result(speech="Okay!")
+        return None                # not our "no"
 
     def search(self, m, text):
         """'what mega man games do we have' / 'which genesis games are there'"""
@@ -100,17 +139,17 @@ class GamesPlugin(Plugin):
             hits = sorted(t for t, _, k in lib if k == kind)
             if not hits:
                 return Result(speech=f"No {SYSTEM_SPOKEN[kind]} games yet!")
-            names = ", ".join(t.title() for t in hits[:8])
-            more = f", and {len(hits) - 8} more" if len(hits) > 8 else ""
-            return Result(speech=f"We have {len(hits)} {SYSTEM_SPOKEN[kind]} "
-                                 f"games! Like {names}{more}.")
+            return self._speak_list(
+                f"We have {len(hits)} {SYSTEM_SPOKEN[kind]} games!",
+                [t.title() for t in hits])
         hits = self._hits(q, lib)
         if not hits:
             return Result(speech=f"I don't see any {q} games in my library. "
                                  "Say list games to hear what I have!")
         n = len(hits)
-        return Result(speech=f"We have {n} {q} game{'s' if n != 1 else ''}: "
-                             f"{self._spoken_hits(hits, lib)}.")
+        return self._speak_list(
+            f"We have {n} {q} game{'s' if n != 1 else ''}:",
+            self._format_names(hits, lib))
 
     def have(self, m, text):
         """'do we have sonic' — answers if it's a game, else lets the LLM try."""
@@ -120,8 +159,11 @@ class GamesPlugin(Plugin):
         if not hits:
             return None            # probably not a game question — brain's turn
         n = len(hits)
+        if n > self.CHUNK:
+            return self._speak_list(f"Yes! We have {n} {q} games:",
+                                    self._format_names(hits, lib))
         return Result(speech=f"Yes! We have {n} {q} game{'s' if n != 1 else ''}: "
-                             f"{self._spoken_hits(hits, lib)}. "
+                             f"{', '.join(self._format_names(hits, lib))}. "
                              f"Say play {hits[0].title()} to start!")
 
     def list_games(self, m, text):
@@ -129,9 +171,9 @@ class GamesPlugin(Plugin):
         if not lib:
             return Result(speech="I don't have any games yet! Your dad needs to "
                                  "put some in my roms folder.")
-        names = [t.title() for t, _, _ in lib[:12]]
-        more = f", and {len(lib) - 12} more" if len(lib) > 12 else ""
-        return Result(speech="I have " + ", ".join(names) + more + ". Want to play one?")
+        hits = sorted({t for t, _, _ in lib})
+        return self._speak_list(f"I have {len(hits)} games!",
+                                self._format_names(hits, lib))
 
     def play(self, m, text):
         want = m.group(1).strip().lower()
