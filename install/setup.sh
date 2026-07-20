@@ -43,6 +43,13 @@ chmod +x install/bmo-run.sh
 sudo chgrp -R bmo /opt/bmo/var /opt/bmo/logs 2>/dev/null || true
 sudo chmod -R g+ws /opt/bmo/var /opt/bmo/logs 2>/dev/null || true
 
+echo "== disable duplicate polkit agent (lxpolkit is the session agent) =="
+for user in sylas corey; do
+    sudo -u $user mkdir -p /home/$user/.config/autostart
+    printf '[Desktop Entry]\nType=Application\nName=PolicyKit agent (disabled; lxpolkit runs)\nHidden=true\n' \
+        | sudo -u $user tee /home/$user/.config/autostart/polkit-mate-authentication-agent-1.desktop >/dev/null
+done
+
 echo "== retroarch: quit hotkeys (Esc verified; Select+Start pending pad) =="
 for user in sylas corey; do
     dir=/home/$user/.config/retroarch
