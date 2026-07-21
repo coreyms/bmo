@@ -26,6 +26,7 @@ import pygame
 from bmo.brain import Brain
 from bmo.config import Config, app_dirs
 from bmo.face import Face
+from bmo.plugins.safety import mask as safety_mask
 from bmo.router import Router
 
 SLEEPING, LISTENING, THINKING, SPEAKING, GAMING = (
@@ -166,7 +167,7 @@ class App:
             self.events.put(ev)
         self.ears.mute(False)     # a dropped speak_end can't leave the mic dead
         self.logger.log("user", text)
-        self.face.caption_top = f"You: {text}"
+        self.face.caption_top = f"You: {safety_mask(text)}"
         self.set_state(THINKING)
         self.work_q.put(text)
 
@@ -387,7 +388,7 @@ class App:
             elif kind == "utterance" and self.state == LISTENING:
                 self.submit(payload)
             elif kind == "partial" and self.state == LISTENING:
-                self.face.caption_top = payload
+                self.face.caption_top = safety_mask(payload)
             elif kind == "speak_start":
                 if self.state not in (GAMING, SLEEPING):
                     self.set_state(SPEAKING)

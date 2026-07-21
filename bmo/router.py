@@ -43,7 +43,7 @@ WAKE_PREFIX = re.compile(r"^(hey\s+)?(beemo|bee mo|be mo|b m o|bmo)[,!.\s]*", re
 
 
 def normalize(text):
-    t = text.strip()
+    t = text.strip().lower()    # Vosk is lowercase; typed input must match
     t = WAKE_PREFIX.sub("", t)              # "BMO, set a timer" -> "set a timer"
     t = re.sub(r"[^\w\s':]", " ", t)
     return re.sub(r"\s+", " ", t).strip()

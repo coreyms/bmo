@@ -22,7 +22,7 @@ CRISIS = re.compile(
 PROFANITY = re.compile(
     r"\b(fuck\w*|shit\w*|cunt\w*|asshole\w*|bitch\w*|pussy|motherfuck\w*|"
     r"cocksucker\w*|whore\w*|slut\w*|dickhead\w*|nigg(?:er|a)\w*|faggot\w*|"
-    r"retard(?:ed)?)\b")
+    r"retard(?:ed)?)\b", re.I)
 
 GROWNUP = re.compile(
     r"\b(porn\w*|sex|sexy|sexual\w*|naked|nudes?|drugs?|weed|marijuana|"
@@ -43,6 +43,12 @@ GROWNUP_REPLIES = [
     "Hmm, that's something to talk about with your dad, not with BMO. "
     "Want to hear a joke instead?",
 ]
+
+
+def mask(text):
+    """Blank profanity for on-screen captions (logs keep the real text
+    so a parent can see what was actually said/misheard)."""
+    return PROFANITY.sub("****", text)
 
 
 def check(text):
