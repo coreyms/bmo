@@ -41,8 +41,10 @@ After "BMO" (or a touch), try:
 
 - **Games** — "play Super Mario World", "play Aladdin on Genesis", "what games
   do we have", "what Mega Man games do we have", "do we have Sonic"
-- **Time** — "set a timer for five minutes", "set an alarm for 7 30 a m",
-  "start the stopwatch", "how long has it been", "what time is it"
+- **Time** — "set a timer for five minutes", "set an alarm for 7 30 a m
+  every school day" (also "every day"; up to 3 alarms, they survive
+  restarts and ring for 3 minutes), "cancel my alarms", "start the
+  stopwatch", "how long has it been", "what time is it"
 - **Fun** — "tell me a joke", "tell me a riddle", "tell me a story",
   "let's play twenty questions", "play a word game"
 - **Music & weather** — "play some music", "play the song …", "next song",
