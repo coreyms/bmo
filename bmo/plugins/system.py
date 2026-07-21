@@ -28,6 +28,11 @@ class SystemPlugin(Plugin):
         self.add(r"\bdeveloper mode\b|\b(?:exit|go|quit|back) to (?:the )?desktop\b",
                  self.dev_mode)
         self.add(r"\bwhat can you do\b|\bhelp me\b", self.help)
+        self.add(r"\b(pair|pairing|connect|connecting|sync|set up|setup)\b"
+                 r".*\b(controller|remote|game ?pad|joystick|eight ?bit ?do)\b"
+                 r"|\b(controller|remote|game ?pad|joystick)\b"
+                 r".*\b(pair|pairing|connect|connecting|work|working|won't|wont|broken)\b",
+                 self.pair_controller)
 
     # "stop" means different things depending on what's happening (plan:
     # intent precedence). Order: talking > alarm > game > music > go to sleep.
@@ -105,6 +110,19 @@ class SystemPlugin(Plugin):
         # a misheard phrase must not be able to close BMO by itself.
         self.app.request_exit_confirm()
         return Result(speech="Okay! Tap Exit if you really want the desktop.")
+
+    def pair_controller(self, m, text):
+        # \n = beat between spoken parts (main.py splits on it)
+        return Result(speech=(
+            "Here's how to get the game controller working!\n"
+            "If it was paired before, just hold Start to turn it on. "
+            "It reconnects all by itself!\n"
+            "For a brand new pairing: hold X and Start together until it "
+            "turns on. That's gamepad mode!\n"
+            "Then hold Select until the light blinks super fast. "
+            "Now it's looking for me!\n"
+            "The last part needs a grown-up: exit to the desktop, click the "
+            "Bluetooth icon, and add the 8BitDo Zero 2. All done!"))
 
     def help(self, m, text):
         return Result(speech="I can chat, tell jokes, set timers and alarms, "
