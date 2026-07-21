@@ -89,10 +89,10 @@ This is robust, cheap, and looks right at 5" screen size. **Stretch upgrade (no 
 6. **Post-review backlog** *(added after the 2026-07-19 code review; roughly in bang-for-buck order)*
    - **Emotion-driven expressions** — `happy`, `surprised`, and `sad` presets already exist in `face.py` but nothing ever triggers them. Have the LLM tag its reply's mood (a one-word prefix token the voice layer strips) and/or let plugins set an expression on their `Result`. Most visible win in the codebase; very teachable (Sylas can add moods).
    - **pytest suite** — `router.normalize`, `timers.parse_number` / `_parse_clock`, `games.clean_title` and the title matcher are pure functions begging for tests. Writing them together is a teaching milestone in itself, and they guard the regex-heavy code that changes most often.
-   - **On-screen timer countdown** — running timers are invisible until they ring; draw a small corner countdown on the face (and a visual while `ringing`). Nice self-contained pygame exercise.
+   - ~~**On-screen timer countdown**~~ — **DONE 2026-07-21**, and grew into status chips (live countdowns, alarm pills, stopwatch, tap-to-manage panel) plus the school-grade alarm overhaul (persistence, recurrence, persistent ring, forced volume).
    - **"How are you feeling?" hardware status** — answer with real CPU temperature/uptime from the Pi ("I'm a little toasty, 61 degrees!"). Small system plugin, big personality payoff.
    - **Math & spelling quiz plugin** — LLM-steered like twenty questions (`style_hint`), keeps score out loud. School practice disguised as a game.
-   - **Parent screen-time limits** — optional `[games] daily_minutes` in config; BMO tracks per-day play time in `var/` and gently refuses past the cap ("we've played a lot today!").
+   - ~~**Parent screen-time limits**~~ — **DECLINED 2026-07-21**: Corey's call — Sylas self-regulates; no cap wanted.
    - **LLM tool-calling router** (already flagged under Architecture) — let the model *decide* to call plugins instead of regex-first routing. Do it as a comparison lesson: same abilities, two dispatch styles, measure latency and reliability.
    - Still open from Phase 5: custom openWakeWord "BMO" model (true "beemo" wake word), whisper.cpp STT swap behind the Ears interface (kid-speech accuracy), DSP visemes for the mouth, YouTube audio via yt-dlp.
 7. **Connectivity & on-screen keyboard** *(added 2026-07-21; OSK first — the Wi-Fi flow depends on it)*

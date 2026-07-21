@@ -9,3 +9,4 @@ models/
 .DS_Store
 var/
 !assets/chime.wav
+.pytest_cache/
