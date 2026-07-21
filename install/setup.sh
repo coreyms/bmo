@@ -49,10 +49,12 @@ for user in sylas corey; do
         | sudo -u $user tee /home/$user/.config/autostart/polkit-mate-authentication-agent-1.desktop >/dev/null
 done
 
-echo "== retroarch: quit hotkeys (Esc verified; Select+Start pending pad) =="
+echo "== retroarch: quit hotkeys (Esc + Select+Start, verified 2026-07-21) =="
 for user in sylas corey; do
     dir=/home/$user/.config/retroarch
-    sudo -u $user mkdir -p $dir
+    sudo -u $user mkdir -p $dir/autoconfig/udev
+    # 8BitDo Zero 2 pad profile (X-input mode) — Debian ships no autoconfig db
+    sudo -u $user cp "$(dirname "$0")/retroarch-autoconfig/"*.cfg $dir/autoconfig/udev/ 2>/dev/null || true
     cfg=$dir/retroarch.cfg
     sudo -u $user touch $cfg
     sudo -u $user sed -i '/^input_enable_hotkey_btn\|^input_exit_emulator_btn\|^input_exit_emulator \|^quit_press_twice\|^video_fullscreen\|^rewind_enable/d' $cfg
