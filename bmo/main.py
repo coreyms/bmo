@@ -108,6 +108,8 @@ class App:
         self._open_joysticks()
         self._axis_step = {}       # axis -> last digital step, for edges
         self.game_menu = None      # set by games plugin on ambiguous "play X"
+        self.timer_panel = None    # tap a status chip -> view/adjust/cancel
+        self._chip_hits = []       # [(rect, payload)] from _draw_status_chips
 
         self.work_q = queue.Queue()
         threading.Thread(target=self._worker, daemon=True, name="router-brain").start()
@@ -295,9 +297,11 @@ class App:
             self._check_corner_hold()
             self.face.update(dt)
             self.face.draw(self.screen)
+            self._draw_status_chips()
             self._draw_mic_button()
             self._draw_corner_hold()
             self._draw_game_menu()
+            self._draw_timer_panel()
             if self.confirm_exit:
                 self._draw_confirm()
             pygame.display.flip()
@@ -379,6 +383,18 @@ class App:
                     return
             self.game_menu = None      # tap anywhere else = cancel
             return
+        if self.timer_panel:
+            for i, r in enumerate(self.timer_panel.get("rects", [])):
+                if r.collidepoint(x, y):
+                    self.timer_panel["sel"] = i
+                    self._panel_act(self.timer_panel["rows"][i][1])
+                    return
+            self.timer_panel = None    # tap anywhere else = close
+            return
+        for r, payload in self._chip_hits:
+            if r.collidepoint(x, y):
+                self._open_chip(payload)
+                return
         if getattr(self, "_btn_mic", None) and self._btn_mic.collidepoint(x, y):
             muted = self.ears.toggle_user_mute()
             self.logger.log("info", f"mic {'muted' if muted else 'unmuted'} via touch")
@@ -413,6 +429,13 @@ class App:
                 self.game_menu = None
                 self.voice.say("Okay, never mind!")
             return
+        panel = self.timer_panel
+        if panel:
+            if btn in (7, 1):           # Start or A activates the row
+                self._panel_act(panel["rows"][panel["sel"]][1])
+            elif btn in (6, 0):         # Select or B closes
+                self.timer_panel = None
+            return
         if btn == 7:                    # Start behaves like a touch
             if self.state == SLEEPING:
                 self.wake(greet=True)
@@ -434,6 +457,10 @@ class App:
                 m["top"] = m["sel"]
             elif m["sel"] >= m["top"] + self.MENU_VISIBLE:
                 m["top"] = m["sel"] - self.MENU_VISIBLE + 1
+        elif axis == 1 and step != 0 and prev == 0 and self.timer_panel:
+            p = self.timer_panel
+            p["sel"] = (p["sel"] + step) % len(p["rows"])
+            p["at"] = time.time()
 
     def _menu_launch(self, idx):
         menu = self.game_menu
@@ -515,6 +542,198 @@ class App:
                 self.ears.mute(False)
                 self.wake(greet=False)
                 self.voice.say("That was fun! What next?")
+
+    # --------------------------------------------------------- status chips
+    @staticmethod
+    def _fmt_dur(secs):
+        secs = max(0, int(secs))
+        h, rest = divmod(secs, 3600)
+        m, s = divmod(rest, 60)
+        return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+    @staticmethod
+    def _alarm_text(item):
+        return item["label"].replace(" A M", " AM").replace(" P M", " PM")
+
+    def _draw_status_chips(self):
+        """Small translucent pills, top-left: live timer countdowns, set
+        alarms, running stopwatch. Absent when nothing is active."""
+        self._chip_hits = []
+        tm = getattr(self, "timers", None)
+        if tm is None or self.state == GAMING:
+            return
+        now = time.time()
+        chips = []                       # (glyph, text, payload, urgent)
+        if tm.ringing:
+            g = "bell" if tm.ringing["kind"] == "alarm" else "timer"
+            chips.append((g, "Ding! (tap)", "ringing", True))
+        items = sorted(tm.items, key=lambda i: i["due"])
+        for it in items[:3]:
+            if it["kind"] == "timer":
+                chips.append(("timer", self._fmt_dur(it["due"] - now), it, False))
+            else:
+                chips.append(("bell", self._alarm_text(it), it, False))
+        if len(items) > 3:
+            chips.append(("more", f"+{len(items) - 3} more", "list", False))
+        if tm.stopwatch is not None:
+            chips.append(("watch", self._fmt_dur(now - tm.stopwatch), "stopwatch", False))
+        if not chips:
+            return
+        _, h = self.screen.get_size()
+        font = self.face._get_font(max(14, h // 24))
+        light = (243, 247, 244)
+        y = 12
+        for glyph, text, payload, urgent in chips:
+            gs = font.get_height() - 4            # glyph box size
+            tsurf = font.render(text, True, light)
+            cw = gs + tsurf.get_width() + 22
+            ch = font.get_height() + 10
+            pill = pygame.Surface((cw, ch), pygame.SRCALPHA)
+            if urgent:
+                alpha = 150 + int(90 * (0.5 + 0.5 * math.sin(time.time() * 6)))
+                pygame.draw.rect(pill, (190, 60, 60, alpha), pill.get_rect(),
+                                 border_radius=ch // 2)
+            else:
+                pygame.draw.rect(pill, (10, 60, 70, 140), pill.get_rect(),
+                                 border_radius=ch // 2)
+            self._draw_glyph(pill, glyph, 8, (ch - gs) // 2, gs, light)
+            pill.blit(tsurf, (gs + 14, 5))
+            rect = pygame.Rect(12, y, cw, ch)
+            self.screen.blit(pill, rect.topleft)
+            self._chip_hits.append((rect, payload))
+            y += ch + 6
+
+    @staticmethod
+    def _draw_glyph(surf, kind, x, y, s, color):
+        if kind == "timer":              # hourglass: two triangles
+            pygame.draw.polygon(surf, color,
+                                [(x, y), (x + s, y), (x + s // 2, y + s // 2)])
+            pygame.draw.polygon(surf, color,
+                                [(x, y + s), (x + s, y + s), (x + s // 2, y + s // 2)])
+        elif kind == "bell":             # dome + base + clapper
+            r = s // 2
+            pygame.draw.circle(surf, color, (x + r, y + r - 1), r - 1)
+            pygame.draw.line(surf, color, (x, y + s - 3), (x + s, y + s - 3), 2)
+            pygame.draw.circle(surf, color, (x + r, y + s - 1), 2)
+        elif kind == "watch":            # stopwatch: ring + stem
+            r = s // 2
+            pygame.draw.circle(surf, color, (x + r, y + r + 1), r - 1, 2)
+            pygame.draw.line(surf, color, (x + r, y - 1), (x + r, y + 2), 2)
+        else:                            # "more": three dots
+            for i in range(3):
+                pygame.draw.circle(surf, color,
+                                   (x + 2 + i * (s // 2 - 1), y + s // 2), 2)
+
+    PANEL_ROWS = {
+        "timer": [("+1 minute", "plus60"), ("-1 minute", "minus60"),
+                  ("Cancel timer", "cancel"), ("Close", "close")],
+        "alarm": [("+10 minutes", "plus600"), ("Cancel alarm", "cancel"),
+                  ("Close", "close")],
+        "stopwatch": [("Stop stopwatch", "stop_watch"), ("Close", "close")],
+    }
+
+    def _open_chip(self, payload):
+        tm = self.timers
+        if payload == "ringing":
+            tm.dismiss()
+            return
+        if payload == "stopwatch":
+            rows = self.PANEL_ROWS["stopwatch"]
+            self.timer_panel = {"kind": "stopwatch", "item": None,
+                                "rows": rows, "sel": 0, "rects": [],
+                                "at": time.time()}
+            return
+        if payload == "list":
+            rows = [(None, ("open", it)) for it in sorted(tm.items, key=lambda i: i["due"])]
+            rows += [("Cancel all", "cancel_all"), ("Close", "close")]
+            self.timer_panel = {"kind": "list", "item": None, "rows": rows,
+                                "sel": 0, "rects": [], "at": time.time()}
+            return
+        self.timer_panel = {"kind": payload["kind"], "item": payload,
+                            "rows": self.PANEL_ROWS[payload["kind"]],
+                            "sel": 0, "rects": [], "at": time.time()}
+
+    def _panel_act(self, action):
+        tm = self.timers
+        panel = self.timer_panel
+        item = panel and panel.get("item")
+        if isinstance(action, tuple) and action[0] == "open":
+            self._open_chip(action[1])
+            return
+        if action == "plus60" and item:
+            item["due"] += 60
+        elif action == "minus60" and item:
+            item["due"] = max(time.time() + 5, item["due"] - 60)
+        elif action == "plus600" and item:
+            item["due"] += 600
+            d = datetime.datetime.fromtimestamp(item["due"])
+            item["label"] = (d.strftime("%-I:%M %p")
+                             .replace("AM", "A M").replace("PM", "P M"))
+        elif action == "cancel":
+            if item in tm.items:
+                tm.items.remove(item)
+            self.logger.log("info", f"cancelled via touch: {item['label']}")
+            self.timer_panel = None
+        elif action == "cancel_all":
+            tm.items.clear()
+            self.timer_panel = None
+        elif action == "stop_watch":
+            tm.stopwatch = None
+            self.timer_panel = None
+        elif action == "close":
+            self.timer_panel = None
+        if panel:
+            panel["at"] = time.time()      # interaction keeps it alive
+
+    def _draw_timer_panel(self):
+        panel = self.timer_panel
+        if not panel:
+            return
+        tm = self.timers
+        item = panel.get("item")
+        if time.time() - panel["at"] > 30 or (item and item not in tm.items):
+            self.timer_panel = None        # timed out, fired, or cancelled
+            return
+        w, h = self.screen.get_size()
+        shade = pygame.Surface((w, h), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 130))
+        self.screen.blit(shade, (0, 0))
+        font = self.face._get_font(max(16, h // 20))
+        if panel["kind"] == "timer":
+            head_txt = f"Timer — {self._fmt_dur(item['due'] - time.time())} left"
+        elif panel["kind"] == "alarm":
+            head_txt = f"Alarm — {self._alarm_text(item)}"
+        elif panel["kind"] == "stopwatch":
+            head_txt = f"Stopwatch — {self._fmt_dur(time.time() - tm.stopwatch)}" \
+                if tm.stopwatch else "Stopwatch"
+        else:
+            head_txt = "Timers and alarms"
+        row_h = font.get_height() + max(8, h // 40)
+        rows = panel["rows"]
+        pw = int(w * 0.7)
+        ph = row_h * (len(rows) + 1) + max(12, h // 30)
+        px, py = (w - pw) // 2, (h - ph) // 2
+        pygame.draw.rect(self.screen, (10, 60, 70),
+                         pygame.Rect(px, py, pw, ph), border_radius=14)
+        head = font.render(head_txt, True, (243, 247, 244))
+        self.screen.blit(head, (px + (pw - head.get_width()) // 2, py + 6))
+        panel["rects"] = []
+        y = py + row_h
+        now = time.time()
+        for i, (label, action) in enumerate(rows):
+            if label is None:              # live row for a list-panel item
+                it = action[1]
+                left = (self._fmt_dur(it["due"] - now) + " left"
+                        if it["kind"] == "timer" else self._alarm_text(it))
+                label = f"{it['kind'].title()} — {left}"
+            r = pygame.Rect(px + 8, y, pw - 16, row_h)
+            if i == panel["sel"]:
+                pygame.draw.rect(self.screen, (85, 190, 178), r, border_radius=10)
+            color = (10, 40, 50) if i == panel["sel"] else (235, 240, 240)
+            t = font.render(label, True, color)
+            self.screen.blit(t, (r.x + 10, r.y + (row_h - t.get_height()) // 2))
+            panel["rects"].append(r)
+            y += row_h
 
     # -------------------------------------------------------------- overlays
     MENU_VISIBLE = 8

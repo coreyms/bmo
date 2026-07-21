@@ -75,6 +75,9 @@ systemctl --user start bmo      # or stop / restart / status
   takes a touch on the dialog, so a misheard phrase can't close BMO by itself.
 - Drop game ROMs in `roms/nes/`, `roms/snes/`, `roms/genesis/`, `roms/sms/`,
   `roms/gamegear/`, `roms/gb/`, or `roms/gbc/`; songs in `music/`.
+- Running timers, set alarms, and the stopwatch show as small pills in the
+  top-left (live countdown). Tap one to adjust (+1 min), cancel, or close;
+  when something rings, its pill flashes red — tap to hush it.
 - The controller works on BMO's face too: **Start** wakes BMO or interrupts
   it mid-sentence. An ambiguous "play zelda" opens an on-screen picker —
   **D-pad** to choose, **Start**/**A** to launch, **B**/**Select** to cancel
