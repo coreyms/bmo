@@ -57,8 +57,11 @@ for user in sylas corey; do
     sudo -u $user cp "$(dirname "$0")/retroarch-autoconfig/"*.cfg $dir/autoconfig/udev/ 2>/dev/null || true
     cfg=$dir/retroarch.cfg
     sudo -u $user touch $cfg
-    sudo -u $user sed -i '/^input_enable_hotkey_btn\|^input_exit_emulator_btn\|^input_exit_emulator \|^quit_press_twice\|^video_fullscreen\|^rewind_enable\|^input_save_state_btn\|^input_load_state_btn/d' $cfg
+    sudo -u $user sed -i '/^input_enable_hotkey_btn\|^input_exit_emulator_btn\|^input_exit_emulator \|^quit_press_twice\|^video_fullscreen\|^rewind_enable\|^input_save_state_btn\|^input_load_state_btn\|^libretro_info_path/d' $cfg
     {
+        # RetroArch's first-run default points this at an empty dir; with the
+        # savestate-bypass off it then claims cores can't save states at all
+        echo 'libretro_info_path = "/usr/share/libretro/info"'
         # single-press Esc quit, verified on the Pi keyboard 2026-07-19
         echo 'input_exit_emulator = "escape"'
         echo 'quit_press_twice = "false"'
