@@ -75,6 +75,8 @@ systemctl --user start bmo      # or stop / restart / status
   takes a touch on the dialog, so a misheard phrase can't close BMO by itself.
 - Drop game ROMs in `roms/nes/`, `roms/snes/`, `roms/genesis/`, `roms/sms/`,
   `roms/gamegear/`, `roms/gb/`, or `roms/gbc/`; songs in `music/`.
+- In-game controller combos (hold **Select** plus): **Start** quit back to
+  BMO, **R** save state, **L** load state.
 - In-game keys: **F2** save state, **F4** load state, hold **R** to rewind
   time, **Esc** quit back to BMO.
 - Conversation transcripts land in `logs/` as JSONL; safety triggers are

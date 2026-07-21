@@ -57,17 +57,20 @@ for user in sylas corey; do
     sudo -u $user cp "$(dirname "$0")/retroarch-autoconfig/"*.cfg $dir/autoconfig/udev/ 2>/dev/null || true
     cfg=$dir/retroarch.cfg
     sudo -u $user touch $cfg
-    sudo -u $user sed -i '/^input_enable_hotkey_btn\|^input_exit_emulator_btn\|^input_exit_emulator \|^quit_press_twice\|^video_fullscreen\|^rewind_enable/d' $cfg
+    sudo -u $user sed -i '/^input_enable_hotkey_btn\|^input_exit_emulator_btn\|^input_exit_emulator \|^quit_press_twice\|^video_fullscreen\|^rewind_enable\|^input_save_state_btn\|^input_load_state_btn/d' $cfg
     {
         # single-press Esc quit, verified on the Pi keyboard 2026-07-19
         echo 'input_exit_emulator = "escape"'
         echo 'quit_press_twice = "false"'
         echo 'video_fullscreen = "true"'
-        # 8BitDo SNES pad: Select=6, Start=7 (verify with a pad connected)
+        # 8BitDo Zero 2 (X-input): Select=6, Start=7, L=4, R=5 — verified
+        # 2026-07-21. Select gates the combos: +Start quit, +R save, +L load.
         echo 'input_enable_hotkey_btn = "6"'
         echo 'input_exit_emulator_btn = "7"'
+        echo 'input_save_state_btn = "5"'
+        echo 'input_load_state_btn = "4"'
         # rewind is off by default (CPU cost) but free on a Pi 5 with 8/16-bit
-        # cores; hold R to rewind. F2/F4 save/load state are RetroArch defaults.
+        # cores; hold R to rewind. F2/F4 save/load state also still work.
         echo 'rewind_enable = "true"'
     } | sudo -u $user tee -a $cfg >/dev/null
 done
