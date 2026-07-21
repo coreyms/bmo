@@ -197,37 +197,51 @@ class GamesPlugin(Plugin):
                 return Result(speech="I don't have any games yet! Your dad needs to "
                                      "put some in my roms folder.")
             return None   # not obviously a game request — let others/brain try
+        # Every title containing the query (whole phrase or all words) is a
+        # candidate. One candidate launches; several open the on-screen
+        # picker instead of guessing — "play legend of zelda" must never
+        # silently pick Oracle of Ages over the NES original.
+        matches = {}
+        for t, p, k in lib:
+            if want == t or want in t or all(w in t.split() for w in want.split()):
+                matches.setdefault((t, k), (t, p, k))
+        matches = sorted(matches.values(), key=lambda e: (len(e[0]), e[0], e[2]))
+        exact = [e for e in matches if e[0] == want]
+        if len(exact) == 1:
+            return self._launch(*exact[0])
+        if len(matches) == 1:
+            return self._launch(*matches[0])
+        if len(matches) > 1:
+            items = [(f"{t.title()}  ({SYSTEM_SPOKEN[k]})", t.title(), p, k)
+                     for t, p, k in matches[:8]]
+            self.app.game_menu = {"items": items, "sel": 0,
+                                  "at": time.time(), "rects": []}
+            n = len(matches)
+            extra = f" Here are the first 8 of {n}." if n > 8 else ""
+            return Result(speech=f"We have {n} games like that!{extra} "
+                                 "Pick one with the controller or a tap, "
+                                 "or say the whole name.")
+        # No containment hits: fuzzy-match for typos and mishearings.
         scored = []
         for i, (t, path, _) in enumerate(lib):
             r = difflib.SequenceMatcher(None, want, t).ratio()
-            if want == t:
-                r = 2.0          # exact title always wins
-            elif want in t or all(w in t.split() for w in want.split()):
-                # contained phrase bumps the score ("mario" inside "super
-                # mario world"); shorter titles win ties so "mario" finds
-                # "mario paint", not some 40-character spin-off
-                r = max(r, 0.85 + 0.14 * len(want) / len(t))
             fname = os.path.basename(path).lower()
-            if r < 2.0 and "(j)" in fname and "(u" not in fname:
+            if "(j)" in fname and "(u" not in fname:
                 r -= 0.03        # near-tie: prefer the English release
             scored.append((r, -len(t), i))
         score, _, best = max(scored)
         title, path, kind = lib[best]
-        if score >= 0.5 and kind_want is None:
-            # same title on several systems and no system asked for -> clarify
-            others = sorted({k for t2, _, k in lib if t2 == title})
-            if len(others) > 1:
-                systems = " and ".join(SYSTEM_SPOKEN[k] for k in others)
-                return Result(speech=f"We have {title.title()} on {systems}! "
-                                     f"Say play {title.title()} on one of those.")
         if score >= 0.5:
-            core = self.app.cfg.find_core(kind)
-            if not core:
-                return Result(speech="Uh oh, my game-playing part is missing! "
-                                     "Tell your dad the emulator core is not installed.")
-            ok = self.app.launch_game(core, path, title.title())
-            return Result(speech=f"Let's play {title.title()}! Here we go!" if ok
-                          else "Hmm, the game would not start. Sorry!")
+            return self._launch(title, path, kind)
         if score >= 0.3:
             return Result(speech=f"Hmm, I don't have that one. Did you mean {title.title()}?")
         return None   # doesn't sound like our library — brain can riff on it
+
+    def _launch(self, title, path, kind):
+        core = self.app.cfg.find_core(kind)
+        if not core:
+            return Result(speech="Uh oh, my game-playing part is missing! "
+                                 "Tell your dad the emulator core is not installed.")
+        ok = self.app.launch_game(core, path, title.title())
+        return Result(speech=f"Let's play {title.title()}! Here we go!" if ok
+                      else "Hmm, the game would not start. Sorry!")

@@ -101,6 +101,14 @@ class App:
         self._game_proc = None
         self.running = True
 
+        # 8BitDo pad drives BMO too (menu pick, wake, interrupt). Verified
+        # X-input map: B=0 A=1 Y=2 X=3 L=4 R=5 Select=6 Start=7, dpad=axes 0/1.
+        pygame.joystick.init()
+        self._joys = {}
+        self._open_joysticks()
+        self._axis_step = {}       # axis -> last digital step, for edges
+        self.game_menu = None      # set by games plugin on ambiguous "play X"
+
         self.work_q = queue.Queue()
         threading.Thread(target=self._worker, daemon=True, name="router-brain").start()
         self.brain.warm_up()
@@ -135,6 +143,15 @@ class App:
 
     def request_exit_confirm(self):
         self.confirm_exit = True
+
+    def _interrupt_speech(self):
+        """Touch or Start button mid-speech: 'stop, you misheard me'."""
+        self._gen += 1        # invalidate the in-flight LLM/worker output
+        self.voice.stop()
+        self.brain.interrupt.set()
+        self.ears.mute(False)   # don't wait on a speak_end that may be gone
+        self.set_state(LISTENING)
+        self.window_deadline = time.time() + self.cfg.get("wake", "window_seconds", 120)
 
     # ------------------------------------------------------------------ work
     def submit(self, text):
@@ -280,6 +297,7 @@ class App:
             self.face.draw(self.screen)
             self._draw_mic_button()
             self._draw_corner_hold()
+            self._draw_game_menu()
             if self.confirm_exit:
                 self._draw_confirm()
             pygame.display.flip()
@@ -317,6 +335,14 @@ class App:
                 self._on_touch(int(ev.x * w), int(ev.y * h))
             elif ev.type == pygame.FINGERUP:
                 self._corner_down_at = None
+            elif ev.type == pygame.JOYDEVICEADDED:
+                self._open_joysticks()
+            elif ev.type == pygame.JOYDEVICEREMOVED:
+                self._joys.pop(ev.instance_id, None)
+            elif ev.type == pygame.JOYBUTTONDOWN:
+                self._on_pad_button(ev.button)
+            elif ev.type == pygame.JOYAXISMOTION:
+                self._on_pad_axis(ev.axis, ev.value)
 
     def _on_key(self, ev):
         if ev.key == pygame.K_ESCAPE:
@@ -344,6 +370,14 @@ class App:
         if self.confirm_exit:
             self._confirm_click(x, y)
             return
+        if self.game_menu:
+            for i, r in enumerate(self.game_menu.get("rects", [])):
+                if r.collidepoint(x, y):
+                    self.game_menu["sel"] = i
+                    self._menu_launch(i)
+                    return
+            self.game_menu = None      # tap anywhere else = cancel
+            return
         if getattr(self, "_btn_mic", None) and self._btn_mic.collidepoint(x, y):
             muted = self.ears.toggle_user_mute()
             self.logger.log("info", f"mic {'muted' if muted else 'unmuted'} via touch")
@@ -356,13 +390,56 @@ class App:
         if self.state == SLEEPING:
             self.wake(greet=True)
         elif self.voice.busy():
-            # touch interrupts BMO mid-speech: "stop, you misheard me"
-            self._gen += 1        # invalidate the in-flight LLM/worker output
-            self.voice.stop()
-            self.brain.interrupt.set()
-            self.ears.mute(False)   # don't wait on a speak_end that may be gone
-            self.set_state(LISTENING)
-            self.window_deadline = time.time() + self.cfg.get("wake", "window_seconds", 120)
+            self._interrupt_speech()
+
+    # ------------------------------------------------------------- controller
+    def _open_joysticks(self):
+        for i in range(pygame.joystick.get_count()):
+            try:
+                j = pygame.joystick.Joystick(i)
+                self._joys[j.get_instance_id()] = j
+            except Exception:
+                pass
+
+    def _on_pad_button(self, btn):
+        if self.state == GAMING:
+            return                      # RetroArch owns the pad during games
+        menu = self.game_menu
+        if menu:
+            if btn in (7, 1):           # Start or A picks
+                self._menu_launch(menu["sel"])
+            elif btn in (6, 0):         # Select or B cancels
+                self.game_menu = None
+                self.voice.say("Okay, never mind!")
+            return
+        if btn == 7:                    # Start behaves like a touch
+            if self.state == SLEEPING:
+                self.wake(greet=True)
+            elif self.voice.busy():
+                self._interrupt_speech()
+
+    def _on_pad_axis(self, axis, value):
+        if self.state == GAMING or axis > 1:
+            return
+        step = 1 if value > 0.5 else (-1 if value < -0.5 else 0)
+        prev = self._axis_step.get(axis, 0)
+        self._axis_step[axis] = step
+        # dpad is digital: act on the press edge only, vertical axis = 1
+        if axis == 1 and step != 0 and prev == 0 and self.game_menu:
+            m = self.game_menu
+            m["sel"] = (m["sel"] + step) % len(m["items"])
+
+    def _menu_launch(self, idx):
+        menu = self.game_menu
+        self.game_menu = None
+        label, title, path, kind = menu["items"][idx]
+        core = self.cfg.find_core(kind)
+        if not core:
+            self.voice.say("Uh oh, my game-playing part is missing! "
+                           "Tell your dad the emulator core is not installed.")
+            return
+        if self.launch_game(core, path, title):
+            self.voice.say(f"Let's play {title}! Here we go!")
 
     def _check_corner_hold(self):
         if self._corner_down_at is None:
@@ -418,6 +495,7 @@ class App:
                 if payload == self._gen and self.state == THINKING:
                     self.set_state(LISTENING)
             elif kind == "game_start":
+                self.game_menu = None
                 self.set_state(GAMING)
                 self.ears.mute(True)
                 pygame.display.iconify()
@@ -433,6 +511,44 @@ class App:
                 self.voice.say("That was fun! What next?")
 
     # -------------------------------------------------------------- overlays
+    def _draw_game_menu(self):
+        menu = self.game_menu
+        if not menu:
+            return
+        if time.time() - menu["at"] > 45:      # forgotten menu melts away
+            self.game_menu = None
+            return
+        w, h = self.screen.get_size()
+        shade = pygame.Surface((w, h), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 130))
+        self.screen.blit(shade, (0, 0))
+        font = self.face._get_font(max(16, h // 20))
+        rows = menu["items"]
+        row_h = font.get_height() + max(8, h // 40)
+        pw = int(w * 0.88)
+        ph = row_h * (len(rows) + 1) + max(12, h // 30)
+        px, py = (w - pw) // 2, (h - ph) // 2
+        pygame.draw.rect(self.screen, (10, 60, 70),
+                         pygame.Rect(px, py, pw, ph), border_radius=14)
+        head = font.render("Which one? (D-pad + Start, or tap)", True,
+                           (243, 247, 244))
+        self.screen.blit(head, (px + (pw - head.get_width()) // 2, py + 6))
+        menu["rects"] = []
+        y = py + row_h
+        for i, (label, *_rest) in enumerate(rows):
+            r = pygame.Rect(px + 8, y, pw - 16, row_h)
+            if i == menu["sel"]:
+                pygame.draw.rect(self.screen, (85, 190, 178), r,
+                                 border_radius=10)
+            color = (10, 40, 50) if i == menu["sel"] else (235, 240, 240)
+            text = label
+            while text and font.size(text)[0] > r.w - 20:
+                text = text[:-2].rstrip() + "…"
+            t = font.render(text, True, color)
+            self.screen.blit(t, (r.x + 10, r.y + (row_h - t.get_height()) // 2))
+            menu["rects"].append(r)
+            y += row_h
+
     def _draw_corner_hold(self):
         """While the escape-hatch corner is held, wash the screen red from
         left to right — progress feedback a finger can't cover (a corner

@@ -75,6 +75,10 @@ systemctl --user start bmo      # or stop / restart / status
   takes a touch on the dialog, so a misheard phrase can't close BMO by itself.
 - Drop game ROMs in `roms/nes/`, `roms/snes/`, `roms/genesis/`, `roms/sms/`,
   `roms/gamegear/`, `roms/gb/`, or `roms/gbc/`; songs in `music/`.
+- The controller works on BMO's face too: **Start** wakes BMO or interrupts
+  it mid-sentence. An ambiguous "play zelda" opens an on-screen picker —
+  **D-pad** to choose, **Start**/**A** to launch, **B**/**Select** to cancel
+  (tapping a row or saying the full name also works).
 - In-game controller combos (hold **Select** plus): **Start** quit back to
   BMO, **R** save state, **L** load state.
 - In-game keys: **F2** save state, **F4** load state, hold **R** to rewind
