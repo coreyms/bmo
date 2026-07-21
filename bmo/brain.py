@@ -118,12 +118,12 @@ class Brain:
                     continue
                 data = json.loads(line)
                 buf += data.get("message", {}).get("content", "")
-                # Emit complete sentences as they form.
+                # Emit complete sentences as they form. A very short first
+                # sentence ("Hi.") waits for more — unless the reply is over.
                 while True:
                     m = SENTENCE_END.search(buf)
-                    if not m or m.end() < 12:   # avoid emitting "Hi." alone... unless short reply
-                        if not m or (m.end() < 12 and not data.get("done")):
-                            break
+                    if not m or (m.end() < 12 and not data.get("done")):
+                        break
                     sentence = clean_for_speech(buf[:m.end()])
                     buf = buf[m.end():]
                     if sentence:

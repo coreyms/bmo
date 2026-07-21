@@ -41,9 +41,9 @@ class WeatherPlugin(Plugin):
             with open(cache) as f:
                 d = json.load(f)
             return d["lat"], d["lon"], d.get("city", "")
-        r = requests.get("http://ip-api.com/json", timeout=6)
+        r = requests.get("https://ipapi.co/json/", timeout=6)   # HTTPS, no key
         d = r.json()
-        loc = {"lat": d["lat"], "lon": d["lon"], "city": d.get("city", "")}
+        loc = {"lat": d["latitude"], "lon": d["longitude"], "city": d.get("city", "")}
         with open(cache, "w") as f:
             json.dump(loc, f)
         return loc["lat"], loc["lon"], loc["city"]

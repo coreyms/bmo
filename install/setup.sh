@@ -39,7 +39,6 @@ sudo chown -R sylas:sylas /home/sylas/.config/systemd
 sudo rm -f /home/sylas/.config/autostart/bmo.desktop
 sudo systemctl -M sylas@ --user daemon-reload
 sudo systemctl -M sylas@ --user enable bmo
-chmod +x install/bmo-run.sh
 sudo chgrp -R bmo /opt/bmo/var /opt/bmo/logs 2>/dev/null || true
 sudo chmod -R g+ws /opt/bmo/var /opt/bmo/logs 2>/dev/null || true
 
