@@ -541,11 +541,24 @@ class App:
                 pygame.draw.rect(self.screen, (85, 190, 178), r,
                                  border_radius=10)
             color = (10, 40, 50) if i == menu["sel"] else (235, 240, 240)
-            text = label
-            while text and font.size(text)[0] > r.w - 20:
-                text = text[:-2].rstrip() + "…"
-            t = font.render(text, True, color)
-            self.screen.blit(t, (r.x + 10, r.y + (row_h - t.get_height()) // 2))
+            avail = r.w - 20
+            overflow = font.size(label)[0] - avail
+            if i == menu["sel"] and overflow > 0:
+                # selected row too wide: ping-pong side-scroll it (cosine so
+                # it eases and pauses at each end); other rows get ellipsis
+                sweep = (1 - math.cos(time.time() * 1.4)) / 2
+                t = font.render(label, True, color)
+                self.screen.set_clip(pygame.Rect(r.x + 10, r.y, avail, row_h))
+                self.screen.blit(t, (r.x + 10 - int(overflow * sweep),
+                                     r.y + (row_h - t.get_height()) // 2))
+                self.screen.set_clip(None)
+            else:
+                text = label
+                while text and font.size(text)[0] > avail:
+                    text = text[:-2].rstrip() + "…"
+                t = font.render(text, True, color)
+                self.screen.blit(t, (r.x + 10,
+                                     r.y + (row_h - t.get_height()) // 2))
             menu["rects"].append(r)
             y += row_h
 

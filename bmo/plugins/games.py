@@ -26,6 +26,9 @@ SYSTEM_WORDS = {"nes": "nes", "nintendo": "nes", "regular nintendo": "nes",
 SYSTEM_SPOKEN = {"nes": "N E S", "snes": "Super Nintendo", "genesis": "Genesis",
                  "sms": "Master System", "gamegear": "Game Gear",
                  "gb": "Game Boy", "gbc": "Game Boy Color"}
+SYSTEM_SHORT = {"nes": "NES", "snes": "SNES", "genesis": "Genesis",
+                "sms": "Master System", "gamegear": "Game Gear",
+                "gb": "Game Boy", "gbc": "GBC"}
 SYSTEM_RX = re.compile(
     r"\s+(?:on|for)\s+(?:the\s+)?("
     + "|".join(sorted(SYSTEM_WORDS, key=len, reverse=True)) + r")$")
@@ -33,8 +36,30 @@ JUNK = re.compile(r"\(.*?\)|\[.*?\]|\.[^.]+$")
 
 
 def clean_title(filename):
+    """'Legend of Zelda, The - A Link to the Past (USA).sfc'
+    -> 'the legend of zelda - a link to the past'"""
     t = JUNK.sub("", filename)
-    return re.sub(r"[_\-.]+", " ", t).strip().lower()
+    t = re.sub(r"[_.]+", " ", t)
+    parts = []
+    for p in re.split(r"\s+-\s+", t):     # spaced dash = subtitle separator
+        p = p.replace("-", " ")           # Spider-Man -> Spider Man (say-able)
+        m = re.match(r"^(.*), (the|a|an)$", p.strip(), re.I)
+        if m:                              # 'Zelda, The' -> 'The Zelda'
+            p = f"{m.group(2)} {m.group(1)}"
+        if p.strip():
+            parts.append(p.strip())
+    t = " - ".join(parts)
+    return re.sub(r"\s+", " ", t).strip().lower()
+
+
+ROMAN = re.compile(r"\b(i{2,3}|iv|vi{0,3}|ix|x)\b", re.I)
+
+
+def display_title(t):
+    """Pretty-case a stored lowercase title for screen and speech."""
+    s = t.title()
+    s = re.sub(r"'([A-Z])", lambda m: "'" + m.group(1).lower(), s)  # Link'S -> Link's
+    return ROMAN.sub(lambda m: m.group(0).upper(), s)               # Ii -> II
 
 
 class GamesPlugin(Plugin):
@@ -93,10 +118,10 @@ class GamesPlugin(Plugin):
         for t in hits:
             ks = sorted(kinds.get(t, ()))
             if len(ks) > 1:
-                out.append(f"{t.title()} on "
+                out.append(f"{display_title(t)} on "
                            + " and ".join(SYSTEM_SPOKEN[k] for k in ks))
             else:
-                out.append(t.title())
+                out.append(display_title(t))
         return out
 
     CHUNK = 8
@@ -145,7 +170,7 @@ class GamesPlugin(Plugin):
                 return Result(speech=f"No {SYSTEM_SPOKEN[kind]} games yet!")
             return self._speak_list(
                 f"We have {len(hits)} {SYSTEM_SPOKEN[kind]} games!",
-                [t.title() for t in hits])
+                [display_title(t) for t in hits])
         hits = self._hits(q, lib)
         if not hits:
             return Result(speech=f"I don't see any {q} games in my library. "
@@ -168,7 +193,7 @@ class GamesPlugin(Plugin):
                                     self._format_names(hits, lib))
         return Result(speech=f"Yes! We have {n} {q} game{'s' if n != 1 else ''}: "
                              f"{', '.join(self._format_names(hits, lib))}. "
-                             f"Say play {hits[0].title()} to start!")
+                             f"Say play {display_title(hits[0])} to start!")
 
     def list_games(self, m, text):
         lib = self.library()
@@ -212,7 +237,7 @@ class GamesPlugin(Plugin):
         if len(matches) == 1:
             return self._launch(*matches[0])
         if len(matches) > 1:
-            items = [(f"{t.title()}  ({SYSTEM_SPOKEN[k]})", t.title(), p, k)
+            items = [(f"{display_title(t)}  ({SYSTEM_SHORT[k]})", display_title(t), p, k)
                      for t, p, k in matches[:8]]
             self.app.game_menu = {"items": items, "sel": 0,
                                   "at": time.time(), "rects": []}
@@ -234,7 +259,7 @@ class GamesPlugin(Plugin):
         if score >= 0.5:
             return self._launch(title, path, kind)
         if score >= 0.3:
-            return Result(speech=f"Hmm, I don't have that one. Did you mean {title.title()}?")
+            return Result(speech=f"Hmm, I don't have that one. Did you mean {display_title(title)}?")
         return None   # doesn't sound like our library — brain can riff on it
 
     def _launch(self, title, path, kind):
@@ -242,6 +267,6 @@ class GamesPlugin(Plugin):
         if not core:
             return Result(speech="Uh oh, my game-playing part is missing! "
                                  "Tell your dad the emulator core is not installed.")
-        ok = self.app.launch_game(core, path, title.title())
-        return Result(speech=f"Let's play {title.title()}! Here we go!" if ok
+        ok = self.app.launch_game(core, path, display_title(title))
+        return Result(speech=f"Let's play {display_title(title)}! Here we go!" if ok
                       else "Hmm, the game would not start. Sorry!")
