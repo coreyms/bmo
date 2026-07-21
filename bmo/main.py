@@ -99,6 +99,7 @@ class App:
         self._corner_down_at = None
         self._last_touch = 0.0
         self._game_proc = None
+        self._video = False        # GAMING state, but it's mpv not RetroArch
         self.running = True
 
         # 8BitDo pad drives BMO too (menu pick, wake, interrupt). Verified
@@ -295,6 +296,38 @@ class App:
             return True
         return False
 
+    def launch_video(self, target, spoken):
+        """YouTube on top of the face: mpv takes the screen like RetroArch
+        does. `target` is a video URL (from the search picker) or a plain
+        query (falls back to top-3 search). 480p cap — panel-native, easy
+        on Pi 5 software decode. Stopped by wake word, Start, or Esc/q."""
+        if self.game_running():
+            return False
+        self.logger.log("info", f"youtube: {target}")
+        if getattr(self, "music", None):
+            self.music.stop()
+
+        def _run():
+            deadline = time.time() + 8      # let the intro line finish
+            while self.voice.busy() and time.time() < deadline:
+                time.sleep(0.1)
+            self.events.put(("video_start", spoken))
+            try:
+                src = (target if target.startswith("http")
+                       else f"ytdl://ytsearch3:{target}")
+                self._game_proc = subprocess.Popen(
+                    ["mpv", "--fs", "--no-terminal", "--really-quiet",
+                     "--ytdl-format=bv*[height<=480]+ba/b[height<=480]/b",
+                     src],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self._game_proc.wait()
+            except Exception as e:
+                self.logger.log("error", f"youtube mpv: {e}")
+            self.events.put(("video_over", spoken))
+
+        threading.Thread(target=_run, daemon=True, name="video").start()
+        return True
+
     # ------------------------------------------------------------------ loop
     def run(self):
         clock = pygame.time.Clock()
@@ -431,6 +464,8 @@ class App:
 
     def _on_pad_button(self, btn):
         if self.state == GAMING:
+            if self._video and btn == 7:    # mpv ignores the pad; Start stops
+                self.quit_game()
             return                      # RetroArch owns the pad during games
         menu = self.game_menu
         if menu:
@@ -477,6 +512,10 @@ class App:
         menu = self.game_menu
         self.game_menu = None
         label, title, path, kind = menu["items"][idx]
+        if kind == "youtube":
+            if self.launch_video(path, title):
+                self.voice.say("Ooh, good pick! Here it comes!")
+            return
         core = self.cfg.find_core(kind)
         if not core:
             self.voice.say("Uh oh, my game-playing part is missing! "
@@ -506,6 +545,10 @@ class App:
             if kind == "wake" and self.state == SLEEPING:
                 self.logger.log("info", f"wake word: {payload}")
                 self.wake(greet=True)
+            elif kind == "wake" and self.state == GAMING and self._video:
+                # "BMO!" over a video = stop it; video_over brings us back
+                self.logger.log("info", "wake word stops video")
+                self.quit_game()
             elif kind == "utterance" and self.state == LISTENING:
                 self.submit(payload)
             elif kind == "partial" and self.state == LISTENING:
@@ -522,7 +565,8 @@ class App:
             elif kind == "speak_end":
                 # An announcement finishing mid-game must not reopen the mic;
                 # game_over unmutes when RetroArch gives the screen back.
-                if self.state != GAMING:
+                # Videos are the exception: their ears stay on (wake mode).
+                if self.state != GAMING or self._video:
                     self.ears.mute(False)
                 # Only leave SPEAKING when the whole reply is finished —
                 # between-sentence gaps must not flap the state/expression.
@@ -547,8 +591,19 @@ class App:
                 self.set_state(GAMING)
                 self.ears.mute(True)
                 pygame.display.iconify()
-            elif kind == "game_over":
-                # take the screen back from RetroArch
+            elif kind == "video_start":
+                self.game_menu = None
+                self._video = True
+                self.set_state(GAMING)
+                # full transcription would hear the video itself — listen
+                # for the wake word only ("BMO!" = stop the video)
+                self.ears.mute(False)
+                self.ears.set_mode(self._mode_wake)
+                pygame.display.iconify()
+            elif kind in ("game_over", "video_over"):
+                was_video = self._video
+                self._video = False
+                # take the screen back from RetroArch / mpv
                 if self.cfg.dev:
                     self.screen = pygame.display.set_mode(
                         self.screen.get_size(), pygame.RESIZABLE)
@@ -556,7 +611,8 @@ class App:
                     self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
                 self.ears.mute(False)
                 self.wake(greet=False)
-                self.voice.say("That was fun! What next?")
+                self.voice.say("Okay, back to me! What next?" if was_video
+                               else "That was fun! What next?")
 
     # --------------------------------------------------------- status chips
     @staticmethod
