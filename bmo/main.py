@@ -682,6 +682,8 @@ class App:
             self.timer_panel = None
         elif action == "close":
             self.timer_panel = None
+        if action != "close":
+            tm.save()                      # touch edits must survive restarts
         if panel:
             panel["at"] = time.time()      # interaction keeps it alive
 
@@ -702,7 +704,9 @@ class App:
         if panel["kind"] == "timer":
             head_txt = f"Timer — {self._fmt_dur(item['due'] - time.time())} left"
         elif panel["kind"] == "alarm":
-            head_txt = f"Alarm — {self._alarm_text(item)}"
+            rep = {"daily": " · every day", "weekdays": " · school days"}.get(
+                item.get("repeat", "once"), "")
+            head_txt = f"Alarm — {self._alarm_text(item)}{rep}"
         elif panel["kind"] == "stopwatch":
             head_txt = f"Stopwatch — {self._fmt_dur(time.time() - tm.stopwatch)}" \
                 if tm.stopwatch else "Stopwatch"
