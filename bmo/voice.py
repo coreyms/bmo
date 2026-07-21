@@ -35,6 +35,7 @@ except Exception as e:      # missing libportaudio etc.
     _SD_ERR = e
 
 FRAME_MS = 20
+CACHE_MAX_MB = 200
 
 
 def compute_envelope(samples, rate, frame_ms=FRAME_MS):
@@ -87,6 +88,7 @@ class Voice:
 
     def _preload(self):
         """Load the TTS model at startup so the first sentence isn't slow."""
+        self._prune_cache()
         try:
             self._ensure_piper()
             if self.logger:
@@ -94,6 +96,23 @@ class Voice:
         except Exception as e:
             if self.logger:
                 self.logger.log("error", f"voice preload: {e}")
+
+    def _prune_cache(self):
+        """Cap the TTS cache, oldest-used first (cache hits touch mtime)."""
+        try:
+            files = []
+            for name in os.listdir(self.cache_dir):
+                p = os.path.join(self.cache_dir, name)
+                st = os.stat(p)
+                files.append((st.st_mtime, st.st_size, p))
+            total = sum(s for _, s, _ in files)
+            for _, size, p in sorted(files):
+                if total <= CACHE_MAX_MB * 1024 * 1024:
+                    break
+                os.remove(p)
+                total -= size
+        except Exception:
+            pass
 
     def _detect_output(self):
         if sd is None:
@@ -114,23 +133,27 @@ class Voice:
         return self._have_audio
 
     # ------------------------------------------------------------------- api
+    _flush = 0     # bumped by stop(); queue entries carry the value they
+                   # were enqueued under, so pre-stop sentences never play
+
     def say(self, sentence):
         if sentence and sentence.strip():
-            self.q.put(sentence.strip())
+            self.q.put((self._flush, sentence.strip()))
 
     def stop(self):
-        """Interrupt: flush queue and halt current playback."""
+        """Interrupt: flush queue and halt current playback.
+
+        Never touches sounddevice here — only the worker thread may. A
+        cross-thread sd.stop() against the worker's sd.play() can deadlock
+        inside ALSA, freezing the face mid-word with the mic muted. The
+        worker polls `interrupt` every frame and stops itself."""
+        self._flush += 1
         self.interrupt.set()
         try:
             while True:
                 self.q.get_nowait()
         except queue.Empty:
             pass
-        if sd is not None:
-            try:
-                sd.stop()
-            except Exception:
-                pass
 
     def busy(self):
         return self.speaking.is_set() or not self.q.empty()
@@ -138,7 +161,15 @@ class Voice:
     # ---------------------------------------------------------------- worker
     def _run(self):
         while True:
-            sentence = self.q.get()
+            flush_no, sentence = self.q.get()
+            if flush_no != self._flush:
+                # grabbed just as stop() drained the queue — discard, but
+                # still settle the speaking state or busy() sticks forever
+                if self.q.empty():
+                    self.face.speaking = False
+                    self.speaking.clear()
+                    self.events.put(("speak_end", sentence))
+                continue
             self.interrupt.clear()
             self.speaking.set()
             self.face.speaking = True
@@ -177,8 +208,12 @@ class Voice:
         return text
 
     def _cache_path(self, spoken):
+        # Key on the effective synthesis scale (length_scale * pitch_factor —
+        # what _synth_fresh actually uses), so changing pitch_semitones in
+        # config can never replay stale audio at the wrong pace.
+        ls = self.length_scale * self.pitch_factor
         key = hashlib.sha1(
-            f"{os.path.basename(self.voice_path)}|{self.length_scale}|{spoken}"
+            f"{os.path.basename(self.voice_path)}|{ls:g}|{spoken}"
             .encode()).hexdigest()
         return os.path.join(self.cache_dir, key + ".wav")
 
@@ -190,6 +225,7 @@ class Voice:
         path = self._cache_path(spoken)
         try:
             if os.path.exists(path):
+                os.utime(path)                      # mark used, for LRU pruning
                 with wave.open(path, "rb") as w:
                     return (np.frombuffer(w.readframes(w.getnframes()),
                                           dtype=np.int16), w.getframerate())

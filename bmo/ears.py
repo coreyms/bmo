@@ -27,6 +27,12 @@ SetLogLevel(-1)  # keep Vosk quiet in our logs
 MODE_WAKE = "wake"
 MODE_LISTEN = "listen"
 
+# Vosk transcribes breaths/room hiss as filler words; an utterance made up
+# ONLY of these is noise, not speech. Real one-word commands ("stop", "yes",
+# "nope") are unaffected.
+NOISE_WORDS = {"huh", "uh", "um", "hmm", "hm", "mm", "mhm", "ah", "ha",
+               "oh", "eh", "er", "the", "a", "and", "but"}
+
 
 def _real_source_exists():
     """True if PipeWire lists at least one actual capture source. On systems
@@ -81,6 +87,7 @@ class Ears:
         self.mode = MODE_WAKE
         self.enabled = False
         self.muted = threading.Event()      # gated while BMO speaks
+        self.user_muted = threading.Event()  # on-screen button; only the user clears it
         self._audio_q = queue.Queue()
         self._mode_lock = threading.Lock()
         self._stream = None
@@ -128,7 +135,7 @@ class Ears:
         return None
 
     def _on_audio(self, indata, frames, t, status):
-        if not self.muted.is_set():
+        if not (self.muted.is_set() or self.user_muted.is_set()):
             self._audio_q.put(bytes(indata))
 
     # ------------------------------------------------------------------ mode
@@ -140,14 +147,27 @@ class Ears:
     def mute(self, on):
         if on:
             self.muted.set()
-            # drop anything BMO's own voice already leaked in
-            try:
-                while True:
-                    self._audio_q.get_nowait()
-            except queue.Empty:
-                pass
+            self._drain()   # drop anything BMO's own voice already leaked in
         else:
             self.muted.clear()
+
+    def toggle_user_mute(self):
+        """Flip the on-screen mute. Independent of mute(): speak_end and
+        game_over clear that gate freely, but only the button clears this one.
+        Returns the new muted state."""
+        if self.user_muted.is_set():
+            self.user_muted.clear()
+            return False
+        self.user_muted.set()
+        self._drain()
+        return True
+
+    def _drain(self):
+        try:
+            while True:
+                self._audio_q.get_nowait()
+        except queue.Empty:
+            pass
 
     # ---------------------------------------------------------------- worker
     def _worker(self):
@@ -171,6 +191,9 @@ class Ears:
                 if current_mode == MODE_WAKE:
                     if self.engine.is_wake(text):
                         self.events.put(("wake", text))
+                elif all(w in NOISE_WORDS for w in text.split()):
+                    if self.logger:
+                        self.logger.log("info", f"ears: dropped noise: {text}")
                 else:
                     self.events.put(("utterance", text))
             elif current_mode == MODE_LISTEN:

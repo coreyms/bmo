@@ -12,6 +12,7 @@ import argparse
 import datetime
 import fcntl
 import json
+import math
 import os
 import queue
 import random
@@ -41,8 +42,12 @@ GREETINGS = ["Yes? I'm listening!", "Hi! What's up?", "BMO is here!",
 THINKING_ACKS = ["Hmm, let me think!", "Okay okay, thinking!", "Thinking thinking...",
                  "Let me use my robot brain!", "Hmm hmm hmm...", "One second, computing!"]
 
+GOODBYES = ["Okay! See you later!", "Bye bye! Come back soon!",
+            "Goodbye, friend! I'll be right here!", "Bye! Have fun out there!",
+            "Later, friend! Beep boop!", "Bye bye! Don't forget about me!"]
+
 CORNER = 90          # px hot corner (top-right) for the parent escape hatch
-HOLD_SECS = 5.0
+HOLD_SECS = 2.5
 
 
 class Logger:
@@ -122,7 +127,7 @@ class App:
         self.voice.stop()
         self.brain.interrupt.set()
         if say_bye:
-            self.voice.say("Okay! See you later!")
+            self.voice.say(random.choice(GOODBYES))
         self.set_state(SLEEPING)
         self.face.caption_top = ""
         self.face.caption_bottom = ""
@@ -213,10 +218,10 @@ class App:
                         self.logger.log("bmo", " ".join(reply), model=self.brain.model)
                 else:
                     # handled silently (stop/sleep) — return to listening if awake
-                    self.events.put(("idle", None))
+                    self.events.put(("idle", gen))
             finally:
                 self._worker_busy = False
-                self.events.put(("done", None))
+                self.events.put(("done", gen))
 
     def announce(self, text):
         """Out-of-band speech (timer/alarm firing) — even during games."""
@@ -224,7 +229,12 @@ class App:
         self.voice.say(text)
 
     # ----------------------------------------------------------------- games
+    def game_running(self):
+        return self._game_proc is not None and self._game_proc.poll() is None
+
     def launch_game(self, core, rom, title):
+        if self.game_running():
+            return False     # don't stack a second RetroArch on the first
         self.logger.log("info", f"launching game: {title}")
         if getattr(self, "music", None):
             self.music.stop()
@@ -249,9 +259,8 @@ class App:
 
     def quit_game(self):
         """Terminate a running game; the waiter thread fires game_over."""
-        p = self._game_proc
-        if p and p.poll() is None:
-            p.terminate()
+        if self.game_running():
+            self._game_proc.terminate()
             return True
         return False
 
@@ -268,6 +277,8 @@ class App:
             self._check_corner_hold()
             self.face.update(dt)
             self.face.draw(self.screen)
+            self._draw_mic_button()
+            self._draw_corner_hold()
             if self.confirm_exit:
                 self._draw_confirm()
             pygame.display.flip()
@@ -332,31 +343,36 @@ class App:
         if self.confirm_exit:
             self._confirm_click(x, y)
             return
+        if getattr(self, "_btn_mic", None) and self._btn_mic.collidepoint(x, y):
+            muted = self.ears.toggle_user_mute()
+            self.logger.log("info", f"mic {'muted' if muted else 'unmuted'} via touch")
+            if muted:
+                self.face.caption_top = ""   # drop any half-heard partial
+            return
         if x > w - CORNER and y < CORNER:
             self._corner_down_at = now
             return
         if self.state == SLEEPING:
             self.wake(greet=True)
         elif self.voice.busy():
-            # touch interrupts BMO mid-speech
+            # touch interrupts BMO mid-speech: "stop, you misheard me"
+            self._gen += 1        # invalidate the in-flight LLM/worker output
             self.voice.stop()
             self.brain.interrupt.set()
+            self.ears.mute(False)   # don't wait on a speak_end that may be gone
             self.set_state(LISTENING)
             self.window_deadline = time.time() + self.cfg.get("wake", "window_seconds", 120)
 
     def _check_corner_hold(self):
         if self._corner_down_at is None:
             return
-        held = pygame.mouse.get_pressed()[0] or self._finger_down()
+        held = pygame.mouse.get_pressed()[0]   # SDL mirrors touch into mouse state
         if not held:
             self._corner_down_at = None
             return
         if time.monotonic() - self._corner_down_at >= HOLD_SECS:
             self._corner_down_at = None
             self.confirm_exit = True
-
-    def _finger_down(self):
-        return bool(pygame.mouse.get_pressed()[0])
 
     # ------------------------------------------------- worker-thread events
     def _drain_worker_events(self):
@@ -378,7 +394,10 @@ class App:
                 self.ears.mute(True)
                 self.face.caption_bottom = f"BMO: {payload}"
             elif kind == "speak_end":
-                self.ears.mute(False)
+                # An announcement finishing mid-game must not reopen the mic;
+                # game_over unmutes when RetroArch gives the screen back.
+                if self.state != GAMING:
+                    self.ears.mute(False)
                 # Only leave SPEAKING when the whole reply is finished —
                 # between-sentence gaps must not flap the state/expression.
                 if (self.state == SPEAKING and not self._worker_busy
@@ -387,12 +406,15 @@ class App:
                     self.window_deadline = time.time() + self.cfg.get(
                         "wake", "window_seconds", 120)
             elif kind == "done":
-                if self.state in (SPEAKING, THINKING) and not self.voice.busy():
+                # payload is the request generation: a superseded task's done
+                # must not yank the new request out of THINKING early.
+                if (payload == self._gen and self.state in (SPEAKING, THINKING)
+                        and not self.voice.busy()):
                     self.set_state(LISTENING)
                     self.window_deadline = time.time() + self.cfg.get(
                         "wake", "window_seconds", 120)
             elif kind == "idle":
-                if self.state == THINKING:
+                if payload == self._gen and self.state == THINKING:
                     self.set_state(LISTENING)
             elif kind == "game_start":
                 self.set_state(GAMING)
@@ -410,6 +432,56 @@ class App:
                 self.voice.say("That was fun! What next?")
 
     # -------------------------------------------------------------- overlays
+    def _draw_corner_hold(self):
+        """While the escape-hatch corner is held, wash the screen red from
+        left to right — progress feedback a finger can't cover (a corner
+        ring hides under the fingertip on a touchscreen)."""
+        if self._corner_down_at is None:
+            return
+        frac = (time.monotonic() - self._corner_down_at) / HOLD_SECS
+        if frac < 0.08:      # don't flash on ordinary taps
+            return
+        w, h = self.screen.get_size()
+        band = pygame.Surface((int(w * min(frac, 1.0)), h), pygame.SRCALPHA)
+        band.fill((190, 60, 60, 110))
+        self.screen.blit(band, (0, 0))
+
+    def _draw_mic_button(self):
+        """Bottom-right touch toggle for the mic. Hidden when no mic is open."""
+        if not self.ears.enabled:
+            self._btn_mic = None
+            return
+        w, h = self.screen.get_size()
+        r = max(14, h // 22)
+        cx, cy = w - r - r // 2, h - r - r // 2
+        self._btn_mic = pygame.Rect(cx - r, cy - r, r * 2, r * 2)
+        muted = self.ears.user_muted.is_set()
+        dark = (14, 46, 62)                      # face line color
+        # Draw on an alpha surface and blit translucent, so subtitles that
+        # run under the button stay readable. Muted is more opaque on purpose.
+        surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+        pygame.draw.circle(surf, (180, 70, 70) if muted else (66, 160, 150),
+                           (r, r), r)
+        pygame.draw.circle(surf, dark, (r, r), r, max(2, r // 12))
+        # microphone glyph: capsule + cradle arc + stem + base
+        cap = pygame.Rect(0, 0, int(r * 0.42), int(r * 0.72))
+        cap.center = (r, r - int(r * 0.22))
+        pygame.draw.rect(surf, dark, cap, border_radius=cap.w // 2)
+        arc_box = pygame.Rect(0, 0, int(r * 0.95), int(r * 0.95))
+        arc_box.center = (r, r - int(r * 0.12))
+        pygame.draw.arc(surf, dark, arc_box, math.pi, 2 * math.pi,
+                        max(2, r // 9))
+        pygame.draw.line(surf, dark, (r, r + int(r * 0.36)),
+                         (r, r + int(r * 0.52)), max(2, r // 10))
+        pygame.draw.line(surf, dark, (r - int(r * 0.26), r + int(r * 0.52)),
+                         (r + int(r * 0.26), r + int(r * 0.52)), max(2, r // 10))
+        if muted:
+            d = int(r * 0.62)
+            pygame.draw.line(surf, dark, (r - d, r - d), (r + d, r + d),
+                             max(3, r // 6))
+        surf.set_alpha(175 if muted else 110)
+        self.screen.blit(surf, self._btn_mic.topleft)
+
     def _draw_confirm(self):
         w, h = self.screen.get_size()
         shade = pygame.Surface((w, h), pygame.SRCALPHA)
