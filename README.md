@@ -9,9 +9,15 @@ BMO boots straight into a fullscreen animated face and acts as the whole OS:
 - **Say "BMO"** (or touch the screen) to wake it, then just talk — a local LLM
   answers out loud. No cloud, works with zero internet.
 - **Launches NES, SNES, Sega, and Game Boy games by voice**: "BMO, play Super
-  Mario World" starts RetroArch fullscreen; quitting the game (Esc, the pad
-  hotkey, or "BMO, stop the game") brings the face back.
-- Timers and alarms, jokes and word games, music, weather.
+  Mario World" starts RetroArch fullscreen; quitting the game (Esc or the pad
+  hotkey — the mic is off while a game runs) brings the face back.
+- Timers, alarms, and a stopwatch; jokes, riddles, stories, and word games;
+  music, weather, volume control.
+- **Long-term memory**: "BMO, remember that my favorite color is teal" — facts
+  survive reboots and the LLM knows them in every conversation.
+- **Kid-safety guardrails**: bad words, grown-up topics, and anything worrying
+  get a gentle scripted redirect (never the LLM), on both what BMO hears
+  *and* what it says. Matches are logged for parent review.
 - Conversations stay open ~2 minutes after the last exchange; "BMO, stop"
   puts it back to sleep.
 
@@ -24,8 +30,29 @@ BMO boots straight into a fullscreen animated face and acts as the whole OS:
 | Voice + lip sync | Piper TTS → sox pitch shift → RMS envelope drives the mouth | `bmo/voice.py` |
 | Brain | Ollama: qwen2.5:3b (default) or llama3.2:1b, streamed sentence-by-sentence | `bmo/brain.py` |
 | Commands | regex intent router; plugins win, LLM is the fallback | `bmo/router.py`, `bmo/plugins/` |
+| Memory | diary facts folded into the system prompt | `bmo/plugins/diary.py`, `var/diary.json` |
+| Safety | 3 tiers (crisis / profanity / grown-up), input + output | `bmo/plugins/safety.py` |
 
 Everything is configured in [`config.toml`](config.toml).
+
+## Things to say
+
+After "BMO" (or a touch), try:
+
+- **Games** — "play Super Mario World", "play Aladdin on Genesis", "what games
+  do we have", "what Mega Man games do we have", "do we have Sonic"
+- **Time** — "set a timer for five minutes", "set an alarm for 7 30 a m",
+  "start the stopwatch", "how long has it been", "what time is it"
+- **Fun** — "tell me a joke", "tell me a riddle", "tell me a story",
+  "let's play twenty questions", "play a word game"
+- **Music & weather** — "play some music", "play the song …", "next song",
+  "what's the weather"
+- **Memory** — "remember that …", "what do you remember", "forget …"
+- **Robot stuff** — "louder" / "quieter" / "set the volume to 50",
+  "use your little brain" (fast model) / "big brain" (smart model),
+  "what can you do", "stop", "good night"
+
+Anything else goes to the LLM — just talk.
 
 ## Running on the Pi
 
@@ -37,15 +64,22 @@ systemctl --user start bmo      # or stop / restart / status
 ```
 
 - Touch anywhere: wake BMO / interrupt it mid-sentence.
+- Tap the **mic button** (bottom-right circle): mute/unmute the microphone.
+  Red with a slash = BMO can't hear anything until you tap it again — touch
+  and typing still work.
 - Type + Enter (any keyboard): chat without voice — also works before a mic
   is attached.
-- Hold the **top-right corner for 5 seconds** (or press Escape): exit-to-desktop
-  dialog for grown-ups.
+- Hold the **top-right corner for 2.5 seconds** (or press Escape), or say
+  **"exit to desktop"**: exit-to-desktop dialog for grown-ups — the screen
+  washes red left-to-right while you hold, no keyboard needed. Exiting always
+  takes a touch on the dialog, so a misheard phrase can't close BMO by itself.
 - Drop game ROMs in `roms/nes/`, `roms/snes/`, `roms/genesis/`, `roms/sms/`,
   `roms/gamegear/`, `roms/gb/`, or `roms/gbc/`; songs in `music/`.
 - In-game keys: **F2** save state, **F4** load state, hold **R** to rewind
   time, **Esc** quit back to BMO.
-- Conversation transcripts land in `logs/` as JSONL.
+- Conversation transcripts land in `logs/` as JSONL; safety triggers are
+  logged there with `"kind": "safety"`. BMO's diary is plain JSON in
+  `var/diary.json` — easy to review or edit.
 
 Fresh Pi setup from a clone:
 
