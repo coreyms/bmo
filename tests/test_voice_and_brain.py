@@ -53,3 +53,35 @@ def test_fmt_dur():
 
 def test_alarm_text_display():
     assert App._alarm_text({"label": "7:30 P M"}) == "7:30 PM"
+
+
+# ------------------------------------------------------------- mood tags
+def test_mood_tag_extraction():
+    from bmo.brain import take_mood_tag
+    assert take_mood_tag("[happy] Hi there!") == ("happy", "Hi there!", True)
+    assert take_mood_tag("[SAD] oh no.") == ("sad", "oh no.", True)
+    assert take_mood_tag("[plain] Okay.") == (None, "Okay.", True)   # plain = no override
+    # tag still streaming in: hold, don't emit
+    assert take_mood_tag("[surpr") == (None, "[surpr", False)
+    assert take_mood_tag("") == (None, "", False)
+    # no tag at all: resolve and move on
+    assert take_mood_tag("Hello friend, how are") == (None, "Hello friend, how are", True)
+
+
+def test_stray_mood_tags_never_spoken():
+    assert clean_for_speech("[happy] Hi!") == "Hi!"
+    assert clean_for_speech("So [sad] anyway") == "So anyway"
+
+
+def test_result_expression_field():
+    from bmo.router import Result
+    assert Result(speech="x").expression is None
+    assert Result(speech="x", expression="happy").expression == "happy"
+
+
+def test_guess_mood_fallback():
+    from bmo.brain import guess_mood
+    assert guess_mood("Oh sweetie, I'm so sorry about your dog.") == "sad"
+    assert guess_mood("Whoa, no way!") == "surprised"
+    assert guess_mood("Congratulations, that's awesome!") == "happy"
+    assert guess_mood("Two plus two is four.") is None

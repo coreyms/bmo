@@ -117,10 +117,14 @@ class App:
         self.logger.log("info", f"BMO started (dev={cfg.dev}, model={self.brain.model})")
 
     # ----------------------------------------------------------------- state
+    _mood = None      # face preset to wear while speaking ("happy"), or None
+
     def set_state(self, state):
         if state == self.state:
             return
         self.state = state
+        if state in (LISTENING, SLEEPING, GAMING):
+            self._mood = None      # the feeling belongs to the reply, not after
         self.face.set_expression(STATE_FACE[state])
         if self.ears.enabled:
             if state == SLEEPING:
@@ -185,6 +189,7 @@ class App:
         for ev in keep:
             self.events.put(ev)
         self.ears.mute(False)     # a dropped speak_end can't leave the mic dead
+        self._mood = None         # each request earns its own feeling
         self.logger.log("user", text)
         self.face.caption_top = f"You: {safety_mask(text)}"
         self.set_state(THINKING)
@@ -207,6 +212,8 @@ class App:
                     continue
                 if gen != self._gen:      # superseded while routing
                     continue
+                if res.expression:
+                    self._mood = res.expression
                 if res.speech:
                     self.logger.log("bmo", res.speech)
                     for part in res.speech.split("\n"):   # \n = beat between parts
@@ -219,7 +226,11 @@ class App:
                     self._last_ack = random.choice(choices)
                     self.voice.say(self._last_ack)
                     reply = []
-                    for sentence in self.brain.stream_sentences(res.brain_text, res.style_hint):
+                    def _mood_cb(mood, g=gen):
+                        if g == self._gen:
+                            self._mood = mood
+                    for sentence in self.brain.stream_sentences(
+                            res.brain_text, res.style_hint, mood_cb=_mood_cb):
                         if gen != self._gen:  # a newer prompt owns the stage now
                             break
                         # last-resort output guard: the LLM must not wander
@@ -502,6 +513,10 @@ class App:
             elif kind == "speak_start":
                 if self.state not in (GAMING, SLEEPING):
                     self.set_state(SPEAKING)
+                    # the reply's mood overrides the plain speaking face;
+                    # lip sync still drives the mouth on top of it
+                    if self._mood:
+                        self.face.set_expression(self._mood)
                 self.ears.mute(True)
                 self.face.caption_bottom = f"BMO: {payload}"
             elif kind == "speak_end":

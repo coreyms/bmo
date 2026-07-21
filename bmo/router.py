@@ -16,6 +16,7 @@ class Result:
     speech: str = None        # say this directly
     brain_text: str = None    # send this to the LLM instead
     style_hint: str = None    # steering hint passed to the brain
+    expression: str = None    # face preset to wear while saying it ("happy")
 
 
 class Plugin:

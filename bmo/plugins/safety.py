@@ -76,7 +76,7 @@ class SafetyPlugin(Plugin):
             return None               # clean — fall through to normal routing
         self.app.logger.log("safety", text, tier=tier)
         if tier == "crisis":
-            return Result(speech=CRISIS_REPLY)
+            return Result(speech=CRISIS_REPLY, expression="sad")
         if tier == "profanity":
-            return Result(speech=random.choice(PROFANITY_REPLIES))
-        return Result(speech=random.choice(GROWNUP_REPLIES))
+            return Result(speech=random.choice(PROFANITY_REPLIES), expression="sad")
+        return Result(speech=random.choice(GROWNUP_REPLIES), expression="surprised")

@@ -38,7 +38,7 @@ class JokesPlugin(Plugin):
         i = random.choice(fresh)
         self.used.add(i)
         j = self.bank[i]
-        return Result(speech=f"{j['setup']}\n{j['punch']}")
+        return Result(speech=f"{j['setup']}\n{j['punch']}", expression="happy")
 
     def riddle(self, m, text):
         return self._llm_joke(text)

@@ -268,5 +268,7 @@ class GamesPlugin(Plugin):
             return Result(speech="Uh oh, my game-playing part is missing! "
                                  "Tell your dad the emulator core is not installed.")
         ok = self.app.launch_game(core, path, display_title(title))
-        return Result(speech=f"Let's play {display_title(title)}! Here we go!" if ok
-                      else "Hmm, the game would not start. Sorry!")
+        if ok:
+            return Result(speech=f"Let's play {display_title(title)}! Here we go!",
+                          expression="happy")
+        return Result(speech="Hmm, the game would not start. Sorry!", expression="sad")
