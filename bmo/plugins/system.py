@@ -14,16 +14,19 @@ class SystemPlugin(Plugin):
     def __init__(self, app):
         super().__init__(app)
         self.add(r"^(stop|be quiet|quiet|shush|hush|shut up|never ?mind)\b", self.stop)
-        self.add(r"\b(go to sleep|good ?night|see you later)\b", self.sleep)
+        # exact farewells ("good night", "see you later") belong to the
+        # smalltalk plugin, which varies the goodbye and tailors it
+        self.add(r"\bgo to sleep\b", self.sleep)
         self.add(r"\bwhat time is it\b|\bwhat time it is\b|\bwhat(?:'s| is) the time\b"
                  r"|\btell me the time\b|\bdo you know the time\b|\bcurrent time\b"
                  r"|\bwhat does the clock say\b", self.time)
         self.add(r"\bwhat (day|date) is (it|today)\b|\bwhat's today\b", self.date)
-        self.add(r"\b(volume up|louder|turn it up)\b", lambda m, t: self.volume(+10)),
+        self.add(r"\b(volume up|louder|turn it up)\b", lambda m, t: self.volume(+10))
         self.add(r"\b(volume down|quieter|too loud|turn it down)\b", lambda m, t: self.volume(-10))
         self.add(r"\bset (the )?volume to (\d{1,3})\b", self.volume_set)
         self.add(r"\buse your (big|little|small) brain\b|\bswitch brains?\b", self.switch_brain)
-        self.add(r"\bdeveloper mode\b", self.dev_mode)
+        self.add(r"\bdeveloper mode\b|\b(?:exit|go|quit|back) to (?:the )?desktop\b",
+                 self.dev_mode)
         self.add(r"\bwhat can you do\b|\bhelp me\b", self.help)
 
     # "stop" means different things depending on what's happening (plan:
@@ -98,8 +101,10 @@ class SystemPlugin(Plugin):
         return Result(speech=f"Okay! Give me a second, I'm switching to my {size} brain. It takes a moment to wake up!")
 
     def dev_mode(self, m, text):
+        # Opens the touch Exit/Stay dialog rather than quitting outright —
+        # a misheard phrase must not be able to close BMO by itself.
         self.app.request_exit_confirm()
-        return Result()
+        return Result(speech="Okay! Tap Exit if you really want the desktop.")
 
     def help(self, m, text):
         return Result(speech="I can chat, tell jokes, set timers and alarms, "
