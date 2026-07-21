@@ -371,10 +371,11 @@ class App:
             self._confirm_click(x, y)
             return
         if self.game_menu:
-            for i, r in enumerate(self.game_menu.get("rects", [])):
+            for vi, r in enumerate(self.game_menu.get("rects", [])):
                 if r.collidepoint(x, y):
-                    self.game_menu["sel"] = i
-                    self._menu_launch(i)
+                    idx = self.game_menu["top"] + vi   # rects are the window
+                    self.game_menu["sel"] = idx
+                    self._menu_launch(idx)
                     return
             self.game_menu = None      # tap anywhere else = cancel
             return
@@ -428,6 +429,11 @@ class App:
         if axis == 1 and step != 0 and prev == 0 and self.game_menu:
             m = self.game_menu
             m["sel"] = (m["sel"] + step) % len(m["items"])
+            # keep the selection inside the visible window (list scrolls)
+            if m["sel"] < m["top"]:
+                m["top"] = m["sel"]
+            elif m["sel"] >= m["top"] + self.MENU_VISIBLE:
+                m["top"] = m["sel"] - self.MENU_VISIBLE + 1
 
     def _menu_launch(self, idx):
         menu = self.game_menu
@@ -511,6 +517,8 @@ class App:
                 self.voice.say("That was fun! What next?")
 
     # -------------------------------------------------------------- overlays
+    MENU_VISIBLE = 8
+
     def _draw_game_menu(self):
         menu = self.game_menu
         if not menu:
@@ -523,7 +531,8 @@ class App:
         shade.fill((0, 0, 0, 130))
         self.screen.blit(shade, (0, 0))
         font = self.face._get_font(max(16, h // 20))
-        rows = menu["items"]
+        top = menu["top"]
+        rows = menu["items"][top:top + self.MENU_VISIBLE]
         row_h = font.get_height() + max(8, h // 40)
         pw = int(w * 0.88)
         ph = row_h * (len(rows) + 1) + max(12, h // 30)
@@ -533,9 +542,19 @@ class App:
         head = font.render("Which one? (D-pad + Start, or tap)", True,
                            (243, 247, 244))
         self.screen.blit(head, (px + (pw - head.get_width()) // 2, py + 6))
+        # scroll arrows when the list continues past the window
+        if top > 0:
+            pygame.draw.polygon(self.screen, (243, 247, 244),
+                                [(px + pw - 26, py + 18), (px + pw - 10, py + 18),
+                                 (px + pw - 18, py + 8)])
+        if top + self.MENU_VISIBLE < len(menu["items"]):
+            pygame.draw.polygon(self.screen, (243, 247, 244),
+                                [(px + pw - 26, py + ph - 18), (px + pw - 10, py + ph - 18),
+                                 (px + pw - 18, py + ph - 8)])
         menu["rects"] = []
         y = py + row_h
-        for i, (label, *_rest) in enumerate(rows):
+        for vi, (label, *_rest) in enumerate(rows):
+            i = top + vi
             r = pygame.Rect(px + 8, y, pw - 16, row_h)
             if i == menu["sel"]:
                 pygame.draw.rect(self.screen, (85, 190, 178), r,

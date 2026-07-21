@@ -237,12 +237,12 @@ class GamesPlugin(Plugin):
         if len(matches) == 1:
             return self._launch(*matches[0])
         if len(matches) > 1:
-            items = [(f"{display_title(t)}  ({SYSTEM_SHORT[k]})", display_title(t), p, k)
-                     for t, p, k in matches[:8]]
-            self.app.game_menu = {"items": items, "sel": 0,
-                                  "at": time.time(), "rects": []}
             n = len(matches)
-            extra = f" Here are the first 8 of {n}." if n > 8 else ""
+            items = [(f"{display_title(t)}  ({SYSTEM_SHORT[k]})", display_title(t), p, k)
+                     for t, p, k in matches[:20]]
+            self.app.game_menu = {"items": items, "sel": 0, "top": 0,
+                                  "at": time.time(), "rects": []}
+            extra = f" I'll show the first 20." if n > 20 else ""
             return Result(speech=f"We have {n} games like that!{extra} "
                                  "Pick one with the controller or a tap, "
                                  "or say the whole name.")
