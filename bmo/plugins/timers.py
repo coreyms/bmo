@@ -123,7 +123,11 @@ class TimersPlugin(Plugin):
         num = r"([\w ]+?)"
         self.add(rf"\bset a timer for {num} (second|minute|hour)s?\b", self.set_timer)
         self.add(rf"\btimer for {num} (second|minute|hour)s?\b", self.set_timer)
-        self.add(r"\bset (?:an |the |my )?alarm for (.+)$", self.set_alarm)
+        # Anchor on "alarm for/at <time>", verb optional: Vosk regularly
+        # mishears "set an" ("certain alarm for..."), and the time is the
+        # part that matters. "wake me up at 7" is the kid-native phrasing.
+        self.add(r"\b(?:an |the |my |a )?alarms? (?:for|at) (.+)$", self.set_alarm)
+        self.add(r"\bwake me (?:up )?at (.+)$", self.set_alarm)
         self.add(r"\b(cancel|clear|delete) (the |my |all )?(timers?|alarms?)\b", self.cancel)
         # stopwatch intents outrank `remaining` — "how long has it been" is
         # a stopwatch question first, a timer question only as fallback
@@ -180,6 +184,10 @@ class TimersPlugin(Plugin):
         return Result(speech=f"Okay! Timer set for {label}. I'll sing out when it's done!")
 
     def set_alarm(self, m, text):
+        # questions about alarms ("do we have an alarm for school?") are
+        # not requests to set one — let other plugins or the brain answer
+        if re.match(r"^(do|does|is|are|was|when|what|what's|whats|why|how)\b", text):
+            return None
         spec = m.group(1).strip().lower()
         rm = REPEAT_RX.search(spec)
         repeat = "once"

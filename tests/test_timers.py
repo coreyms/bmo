@@ -139,3 +139,23 @@ def test_recurring_alarm_reschedules_on_fire(fake_app):
     p.tick()
     assert p.ringing and p.ringing["kind"] == "alarm"
     assert len(p.items) == 1 and p.items[0]["due"] > time.time()
+
+
+def test_alarm_verb_is_optional(fake_app):
+    # Vosk mishears "set an" -> "certain"; the time is the anchor
+    p = TimersPlugin(fake_app)
+    r = _set(p, "certain alarm for to thirty p m")
+    assert r is not None and "2:30 P M" in r.speech
+
+
+def test_wake_me_up_at(fake_app):
+    p = TimersPlugin(fake_app)
+    r = _set(p, "wake me up at seven a m")
+    assert r is not None and "7:00 A M" in r.speech
+
+
+def test_alarm_questions_fall_through(fake_app):
+    p = TimersPlugin(fake_app)
+    assert _set(p, "do we have an alarm for tomorrow") is None
+    assert _set(p, "what's the alarm for") is None
+    assert len([i for i in p.items if i["kind"] == "alarm"]) == 0
