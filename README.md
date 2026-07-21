@@ -41,6 +41,9 @@ After "BMO" (or a touch), try:
 
 - **Games** — "play Super Mario World", "play Aladdin on Genesis", "what games
   do we have", "what Mega Man games do we have", "do we have Sonic"
+- **Videos** — "watch minecraft parkour", "play the mario theme on youtube":
+  BMO shows the top 6 hits; pick by D-pad + Start, tap, or voice ("the first
+  one"). Say "BMO" (or press Start) to stop the video.
 - **Time** — "set a timer for five minutes", "set an alarm for 7 30 a m
   every school day" (also "every day"; up to 3 alarms, they survive
   restarts and ring for 3 minutes), "cancel my alarms", "start the
